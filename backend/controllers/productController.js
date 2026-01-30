@@ -13,6 +13,7 @@ export const getAllProducts = async (req, res)=>{
         res.status(500).json({success : false, message :"Internal server error"})
     }
 };
+//hehehhhehhe
 export const createProduct = async (req, res)=>{
     const {name, price, image} = req.body
     if(!name || !price || !image){
