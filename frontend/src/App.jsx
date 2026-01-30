@@ -1,13 +1,13 @@
 import React from 'react'
-import Navbar from './components/Navbar.jsx'
+import Navbar from '../components/Navbar.jsx'
 import { Route, Routes } from 'react-router-dom'
-import HomePage from './pages/HomePage.jsx'
-import ProductPage from './pages/ProductPage.jsx'
+import HomePage from '../pages/HomePage.jsx'
+import ProductPage from '../pages/ProductPage.jsx'
 import { useThemeStore } from './store/useThemeStore.js'
 import {Toaster} from 'react-hot-toast';
-import Hero from './pages/Hero.jsx'
-import FlashSale from './pages/FlashSale.jsx'
-import Footer from './components/Footer.jsx'
+import Hero from '../pages/Hero.jsx'
+import FlashSale from '../pages/FlashSale.jsx'
+import Footer from '../components/Footer.jsx'
 
 export default function App() {
   const {theme} = useThemeStore();
