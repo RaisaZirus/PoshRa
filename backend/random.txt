@@ -1,0 +1,42 @@
+ SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema='public'
+      ORDER BY table_name;
+
+INSERT INTO users (
+    name, email, phone, password_hash, role
+)
+VALUES (
+    'Rahim Uddin',
+    'rahim@example.com',
+    '01712345678',
+    md5('password123'),
+    'user'
+);
+--
+INSERT INTO users (
+    name, email, phone, password_hash, role,
+    is_active, email_verified, phone_verified
+)
+SELECT
+    'User_' || g,
+    'user' || g || '@mail.com',
+    '01' || floor(100000000 + random()*899999999),
+    md5(random()::text),
+    (ARRAY['user','seller','admin'])[floor(random()*3+1)],
+    (random() > 0.2),
+    (random() > 0.5),
+    (random() > 0.5)
+FROM generate_series(1,100) g;
+--
+UPDATE users
+SET role = 'seller',
+    updated_at = NOW()
+WHERE email = 'rahim@example.com';
+--
+DELETE FROM users
+WHERE email = 'rahim@example.com';
+
+SELECT name
+FROM users
+WHERE LOWER(name) = LOWER('Rahim Uddin');
