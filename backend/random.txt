@@ -1,3 +1,28 @@
+ psql -h localhost -p 5433 -U postgres -d Poshra -f db.sql
+//user added successfully 
+    const insertUser = await pool.query(`
+    INSERT INTO users 
+    (name, email, phone, password_hash, role)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING *;
+    `, [
+    "Rahima",
+    "rahima@tecom",
+    "0170000",
+    "hashedpasswrd123",
+    "user"
+    ]);
+
+    console.log("Inserted User:", insertUser.rows[0]);
+    const users = await pool.query(`
+  SELECT *
+  FROM users
+  ORDER BY created_at DESC;
+`);
+
+console.log("All Users:");
+console.table(users.rows);
+
  SELECT table_name
       FROM information_schema.tables
       WHERE table_schema='public'

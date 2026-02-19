@@ -4,6 +4,8 @@ async function main() {
   try {
     const res = await pool.query("SELECT NOW() as now;");
     console.log("DB connected. Time:", res.rows[0].now);
+    const info = await pool.query("SELECT current_database() AS db, current_schema() AS schema;");
+    console.log(info.rows[0]);
 
     const tables = await pool.query(`
       SELECT name
