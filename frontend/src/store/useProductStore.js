@@ -7,6 +7,13 @@ export const useProductStore = create((set, get) =>({
     loading:false,
     error:null,
     currentProduct: null,
+    // pagination / search meta
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    suggestions: [],
+    searchHistory: [],
+    autocompleteResults: [],
 
     // form state
     formData: {
@@ -50,6 +57,56 @@ export const useProductStore = create((set, get) =>({
             set({loading: false});
         }
     },
+    searchProducts: async (query, filters = {}, page = 1) => {
+        set({ loading: true });
+        try {
+            const params = { q: query, page, limit: get().pageSize, ...filters };
+            const res = await axios.get(`${BASE_URL}/api/products/search`, { params });
+            const { data, meta } = res.data;
+            set({ products: data || [], error: null, total: meta?.total || 0, page: meta?.page || page });
+        } catch (err) {
+            console.log("Error in searchProducts", err);
+            set({ error: "Search failed", products: [], total: 0 });
+        } finally {
+            set({ loading: false });
+        }
+    },
+    searchAutocomplete: async (query) => {
+        if (!query || query.length < 1) {
+            set({ suggestions: [] });
+            return;
+        }
+        try {
+            const res = await axios.get(`${BASE_URL}/api/products/search/autocomplete`, { params: { q: query } });
+            set({ suggestions: res.data.data || [] });
+        } catch (err) {
+            console.log("autocomplete error", err);
+            set({ suggestions: [] });
+        }
+    },
+    fetchSearchSuggestions: async () => {
+        try {
+            const res = await axios.get(`${BASE_URL}/api/products/search/suggestions`);
+            set({ searchHistory: res.data.data || [] });
+        } catch (err) {
+            console.log("Error fetching suggestions", err);
+            set({ searchHistory: [] });
+        }
+    },
+    fetchAutocomplete: async (query) => {
+        if (!query || query.length < 1) {
+            set({ autocompleteResults: [] });
+            return;
+        }
+        try {
+            const res = await axios.get(`${BASE_URL}/api/products/search/autocomplete`, { params: { q: query } });
+            set({ autocompleteResults: res.data.data || [] });
+        } catch (err) {
+            console.log("Error fetching autocomplete", err);
+            set({ autocompleteResults: [] });
+        }
+    },
+    // (duplicate removed) use `searchProducts(query, filters, page)` above
     deleteProduct: async (id) => {
         console.log("deleteProduct function called", id);
         set({ loading: true });
