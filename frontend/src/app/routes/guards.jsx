@@ -1,27 +1,48 @@
+// =======================================================
+// FILE: src/app/routes/guards.jsx
+// =======================================================
 import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth.jsx";
 
-// If used as <RequireAuth /> wrapping nested routes, it renders <Outlet/>
-// If used as <RequireAuth>{children}</RequireAuth>, it renders children.
 export function RequireAuth({ children }) {
-  const { user, loading } = useAuth();
-  const loc = useLocation();
+  const { user } = useAuth();
+  const location = useLocation();
 
-  if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
-  if (!user) return <Navigate to="/auth/login" replace state={{ from: loc }} />;
+  if (!user) {
+    return (
+      <Navigate
+        to="/auth/login"
+        replace
+        state={{ from: location }}
+      />
+    );
+  }
 
+  // Supports both usages:
+  // 1) element: <RequireAuth />   -> renders Outlet
+  // 2) <RequireAuth>...</RequireAuth> -> renders children
   return children ? children : <Outlet />;
 }
 
-export function RequireRole({ allowed, children }) {
-  const { user, loading } = useAuth();
+export function RequireRole({ allowed = [], children }) {
+  const { user } = useAuth();
+  const location = useLocation();
 
-  if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
-  if (!user) return <Navigate to="/auth/login" replace />;
+  if (!user) {
+    return (
+      <Navigate
+        to="/auth/login"
+        replace
+        state={{ from: location }}
+      />
+    );
+  }
 
-  const ok = allowed.includes(user.role); // role from users.role
-  if (!ok) return <Navigate to="/" replace />;
+  if (allowed.length > 0 && !allowed.includes(user.role)) {
+    // you can change this to a nicer Unauthorized page later
+    return <Navigate to="/" replace />;
+  }
 
-  return children;
+  return children ? children : <Outlet />;
 }

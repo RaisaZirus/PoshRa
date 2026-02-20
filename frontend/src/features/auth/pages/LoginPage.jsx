@@ -45,6 +45,7 @@ function Button({ children, variant = "primary", style, ...props }) {
         background: primary ? COLORS.primary : COLORS.bg,
         color: COLORS.ink,
         boxShadow: primary ? "0 10px 24px rgba(32,29,24,0.12)" : "none",
+        opacity: props.disabled ? 0.7 : 1,
         ...style,
       }}
     >
@@ -100,6 +101,12 @@ function TopBrand() {
   );
 }
 
+function roleHome(role) {
+  if (role === "admin") return "/admin/dashboard";
+  if (role === "seller") return "/seller/dashboard";
+  return "/"; // role "user"
+}
+
 export default function LoginPage() {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
@@ -107,14 +114,26 @@ export default function LoginPage() {
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
 
-  const from = location.state?.from?.pathname || "/";
+  // where user wanted to go before login
+  const from = location.state?.from?.pathname || null;
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    // demo login in useAuth.jsx
-    await login({ email, password });
-    navigate(from, { replace: true });
+    setError("");
+
+    try {
+      const data = await login({ email, password });
+      const role = data?.user?.role;
+
+      // If they were trying to access some protected route, send them there,
+      // otherwise send to role home.
+      const target = from && !from.startsWith("/auth") ? from : roleHome(role);
+      navigate(target, { replace: true });
+    } catch (err) {
+      setError(err.message || "Login failed");
+    }
   };
 
   return (
@@ -126,6 +145,12 @@ export default function LoginPage() {
 
         <div style={{ padding: 16 }}>
           <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+            {error && (
+              <div style={{ padding: 12, borderRadius: 14, border: `1px solid rgba(32,29,24,0.12)`, background: "#fff", fontSize: 12, fontWeight: 900 }}>
+                ❌ {error}
+              </div>
+            )}
+
             <div>
               <Label>Email</Label>
               <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
@@ -152,7 +177,7 @@ export default function LoginPage() {
             <div style={{ marginTop: 6, padding: 12, borderRadius: 14, border: `1px solid rgba(32,29,24,0.12)`, background: COLORS.bg }}>
               <div style={{ fontSize: 12, fontWeight: 1000 }}>Demo tips</div>
               <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "rgba(32,29,24,0.75)", lineHeight: 1.5 }}>
-                Use an email containing <b>admin</b> to log in as admin, or <b>seller</b> to log in as seller.
+                (Now real login) Use a real registered account. Admin accounts should be created manually in DB.
               </div>
             </div>
           </form>
