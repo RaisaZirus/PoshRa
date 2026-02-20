@@ -132,7 +132,7 @@ export default function RegisterPage() {
           <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
             {error && (
               <div style={{ padding: 12, borderRadius: 14, border: `1px solid rgba(32,29,24,0.12)`, background: "#fff", fontSize: 12, fontWeight: 900 }}>
-                ❌ {error}
+                 {error}
               </div>
             )}
 
