@@ -65,3 +65,116 @@ WHERE email = 'rahim@example.com';
 SELECT name
 FROM users
 WHERE LOWER(name) = LOWER('Rahim Uddin');
+
+
+
+
+
+
+
+
+
+//Login extra code
+
+“quick admin creation” just means: register a normal user, then change their role to admin in Postgres, and create the matching row in the admins table (because your schema has a separate admins table linked to users).
+
+Here’s the step-by-step.
+
+Step 0: Decide the admin email
+
+Pick an email you want to make admin, e.g.
+
+admin@poshra.com
+
+You can either register it from your Register page (as Customer/user), or insert it manually. Easiest is register normally.
+
+Step 1: Create the user normally (from your UI)
+
+Go to: /auth/register
+
+Fill:
+
+Name: anything
+
+Role: Customer (this is role='user')
+
+Email: admin@poshra.com
+
+Password: anything
+
+Submit
+
+Now a row exists in users.
+
+Step 2: Open psql and connect to your database
+
+In VS Code terminal (or CMD):
+
+psql -U postgres -d your_database_name
+
+(Replace postgres and db name if different.)
+
+Step 3: Confirm the user exists
+
+Run:
+
+SELECT user_id, email, role
+FROM users
+WHERE email = 'admin@poshra.com';
+
+You should see something like role = user.
+
+Step 4: Promote them to admin (update role)
+
+Run:
+
+UPDATE users
+SET role = 'admin'
+WHERE email = 'admin@poshra.com';
+Step 5: Insert into admins table
+
+Your schema expects an entry in admins table too:
+
+INSERT INTO admins (user_id)
+SELECT user_id
+FROM users
+WHERE email = 'admin@poshra.com'
+ON CONFLICT (user_id) DO NOTHING;
+Step 6: Verify admin setup
+
+Run:
+
+SELECT u.user_id, u.email, u.role, a.admin_id, a.access_level
+FROM users u
+LEFT JOIN admins a ON a.user_id = u.user_id
+WHERE u.email = 'admin@poshra.com';
+
+You should see:
+
+role = admin
+
+an admin_id value (not null)
+
+Step 7: Log in again
+
+Now log out and log back in with that email/password.
+
+Your frontend should redirect to:
+
+✅ /admin/dashboard
+
+And your route guard will allow access because role is now admin.
+
+One-command version (copy/paste)
+
+Just replace the email:
+
+BEGIN;
+
+UPDATE users SET role='admin' WHERE email='admin@poshra.com';
+
+INSERT INTO admins (user_id)
+SELECT user_id FROM users WHERE email='admin@poshra.com'
+ON CONFLICT (user_id) DO NOTHING;
+
+COMMIT;

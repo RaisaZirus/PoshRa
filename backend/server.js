@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import productRoutes from "./routes/productRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import { pool } from "./db.js"; // ✅ use your pg Pool (from test.js)
 import { aj } from "./lib/arcjet.js";
 
@@ -47,6 +48,7 @@ app.use(async (req, res, next) => {
 });
 
 app.use("/api/products", productRoutes);
+app.use("/api/auth", authRoutes);
 
 // ✅ (from test.js) confirm DB is reachable + print server time
 async function checkDBConnection() {

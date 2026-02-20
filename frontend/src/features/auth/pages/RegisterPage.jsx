@@ -3,6 +3,7 @@
 // =======================================================
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../../auth/useAuth.jsx";
 
 const COLORS = {
   bg: "#FDFDF9",
@@ -44,6 +45,7 @@ function Button({ children, variant = "primary", style, ...props }) {
         background: primary ? COLORS.primary : COLORS.bg,
         color: COLORS.ink,
         boxShadow: primary ? "0 10px 24px rgba(32,29,24,0.12)" : "none",
+        opacity: props.disabled ? 0.7 : 1,
         ...style,
       }}
     >
@@ -76,23 +78,43 @@ function Label({ children }) {
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { register, loading } = useAuth();
+
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [role, setRole] = React.useState("user");
+  const [role, setRole] = React.useState("user"); // customer
   const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState("");
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setError("");
 
-    // Wire later: POST /api/auth/register -> users table (password_hash stored in backend)
-    setTimeout(() => {
+    if (!name.trim() || !email.trim() || !password) {
+      setError("Name, email and password are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const data = await register({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        password,
+        role, // "user" or "seller"
+      });
+
+      const r = data?.user?.role;
+      if (r === "seller") navigate("/seller/dashboard", { replace: true });
+      else navigate("/", { replace: true }); // role user
+    } catch (err) {
+      setError(err.message || "Registration failed.");
+    } finally {
       setSubmitting(false);
-      alert("Mock register successful. Wire this to POST /auth/register");
-      navigate("/auth/login", { replace: true });
-    }, 550);
+    }
   };
 
   return (
@@ -108,6 +130,12 @@ export default function RegisterPage() {
 
         <div style={{ padding: 16 }}>
           <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+            {error && (
+              <div style={{ padding: 12, borderRadius: 14, border: `1px solid rgba(32,29,24,0.12)`, background: "#fff", fontSize: 12, fontWeight: 900 }}>
+                ❌ {error}
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
                 <Label>Name</Label>
@@ -150,8 +178,8 @@ export default function RegisterPage() {
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
             </div>
 
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Creating..." : "Create account"}
+            <Button type="submit" disabled={submitting || loading}>
+              {submitting || loading ? "Creating..." : "Create account"}
             </Button>
 
             <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
