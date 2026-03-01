@@ -20,6 +20,7 @@ app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
 
+
 // Apply arcjet to all routes
 app.use(async (req, res, next) => {
   try {
