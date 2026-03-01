@@ -178,3 +178,7 @@ SELECT user_id FROM users WHERE email='admin@poshra.com'
 ON CONFLICT (user_id) DO NOTHING;
 
 COMMIT;
+
+
+node test-get-product.js 11
+node seed-db.js 
