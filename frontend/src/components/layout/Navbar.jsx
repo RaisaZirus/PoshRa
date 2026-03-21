@@ -21,6 +21,7 @@ export default function Navbar() {
           ) : (
             <>
               <Link to="/account/profile">Account</Link>
+              <Link to="/orders">Orders</Link>
               {user.role === "seller" && <Link to="/seller">Seller</Link>}
               {user.role === "admin" && <Link to="/admin">Admin</Link>}
               <button onClick={logout}>Logout</button>

@@ -33,6 +33,56 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
+// Wraps fetch with automatic token refresh on 401
+async function authFetch(path, options = {}, authData, onRefresh, onLogout) {
+  if (!authData?.accessToken) {
+    throw new Error("Not logged in");
+  }
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authData.accessToken}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  // Token expired — try to refresh once
+  if (res.status === 401 && authData?.refreshToken) {
+    try {
+      const refreshRes = await fetch("/api/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: authData.refreshToken }),
+      });
+      const refreshData = await refreshRes.json();
+      if (refreshRes.ok && refreshData.accessToken) {
+        onRefresh(refreshData);
+        // Retry original request with new token
+        const retry = await fetch(path, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${refreshData.accessToken}`,
+            ...(options.headers || {}),
+          },
+        });
+        const retryData = await retry.json().catch(() => ({}));
+        if (!retry.ok) throw new Error(retryData?.message || "Request failed");
+        return retryData;
+      }
+    } catch {
+      // refresh failed — log out
+      onLogout();
+      throw new Error("Session expired. Please log in again.");
+    }
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Request failed");
+  return data;
+}
+
 export function AuthProvider({ children }) {
   const [auth, setAuth] = React.useState(() => loadAuth());
   const [loading, setLoading] = React.useState(false);
@@ -83,6 +133,23 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Convenience: authenticated fetch with auto-refresh
+  const fetchWithAuth = React.useCallback(
+    (path, options = {}) =>
+      authFetch(
+        path,
+        options,
+        auth,
+        (newData) => {
+          const updated = { ...auth, ...newData };
+          saveAuth(updated);
+          setAuth(updated);
+        },
+        logout
+      ),
+    [auth, logout]
+  );
+
   const value = {
     user: auth?.user || null,
     accessToken: auth?.accessToken || null,
@@ -91,6 +158,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    fetchWithAuth,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -98,6 +166,18 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = React.useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+  if (!ctx) {
+    // Return safe defaults during initial render before AuthProvider mounts
+    return {
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      loading: false,
+      login: async () => {},
+      register: async () => {},
+      logout: async () => {},
+      fetchWithAuth: async () => { throw new Error("Not logged in"); },
+    };
+  }
   return ctx;
 }
