@@ -5,14 +5,8 @@ import { pool } from "../db.js";
 export const getAllProducts = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT p.product_id AS id, p.*, MIN(v.price) AS price, MAX(pi.image_url) AS image, SUM(v.stock) AS total_stock
-      FROM products p
-      LEFT JOIN product_variants v ON v.product_id = p.product_id
-      LEFT JOIN product_images pi ON pi.product_id = p.product_id
-      GROUP BY p.product_id
-      ORDER BY p.created_at DESC
-      LIMIT 200
-      SELECT 
+      SELECT
+        p.product_id AS id,
         p.product_id,
         p.store_id,
         p.category_id,
@@ -21,30 +15,19 @@ export const getAllProducts = async (req, res) => {
         p.brand,
         p.status,
         p.created_at,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'variant_id', pv.variant_id,
-          'sku', pv.sku,
-          'price', pv.price,
-          'discount_price', pv.discount_price,
-          'stock', pv.stock
-        )) FILTER (WHERE pv.variant_id IS NOT NULL), '[]'::json) as variants,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'image_id', pi.image_id,
-          'image_url', pi.image_url,
-          'is_primary', pi.is_primary
-        )) FILTER (WHERE pi.image_id IS NOT NULL), '[]'::json) as images,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'attribute_id', pa.attribute_id,
-          'name', pa.name,
-          'value', pa.value
-        )) FILTER (WHERE pa.attribute_id IS NOT NULL), '[]'::json) as attributes
+        MIN(v.price)        AS price,
+        MAX(pi.image_url)   AS image,
+        SUM(v.stock)        AS total_stock,
+        COALESCE((SELECT SUM(oi.quantity) FROM order_items oi
+                  JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
+                  WHERE pv2.product_id = p.product_id), 0)::int AS total_sold
       FROM products p
-      LEFT JOIN product_variants pv ON p.product_id = pv.product_id
-      LEFT JOIN product_images pi ON p.product_id = pi.product_id
-      LEFT JOIN product_attributes pa ON p.product_id = pa.product_id
+      LEFT JOIN product_variants v  ON v.product_id  = p.product_id
+      LEFT JOIN product_images pi   ON pi.product_id = p.product_id
       WHERE p.status = 'active'
       GROUP BY p.product_id
       ORDER BY p.created_at DESC
+      LIMIT 200
     `);
 
     res.status(200).json({ success: true, data: result.rows });
@@ -132,6 +115,13 @@ export const getProduct = async (req, res) => {
         p.brand,
         p.status,
         p.created_at,
+        s.store_name,
+        s.store_slug,
+        COALESCE(AVG(r.rating), 0)::numeric(3,1) AS avg_rating,
+        COUNT(DISTINCT r.review_id)::int AS reviews_count,
+        COALESCE((SELECT SUM(oi.quantity) FROM order_items oi
+                  JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
+                  WHERE pv2.product_id = p.product_id), 0)::int AS total_sold,
         COALESCE(json_agg(DISTINCT jsonb_build_object(
           'variant_id', pv.variant_id,
           'sku', pv.sku,
@@ -150,23 +140,32 @@ export const getProduct = async (req, res) => {
           'value', pa.value
         )) FILTER (WHERE pa.attribute_id IS NOT NULL), '[]'::json) as attributes
        FROM products p
+       JOIN stores s ON s.store_id = p.store_id
+       LEFT JOIN reviews r ON r.product_id = p.product_id
        LEFT JOIN product_variants pv ON p.product_id = pv.product_id
        LEFT JOIN product_images pi ON p.product_id = pi.product_id
        LEFT JOIN product_attributes pa ON p.product_id = pa.product_id
        WHERE p.product_id = $1
-       GROUP BY p.product_id`,
+       GROUP BY p.product_id, s.store_name, s.store_slug`,
       [id]
     );
 
-    const product = prodRes.rows[0];
-    const variantsRes = await pool.query(`SELECT * FROM product_variants WHERE product_id = $1`, [id]);
-    const imagesRes = await pool.query(`SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, image_id ASC`, [id]);
+    const product = result.rows[0];
 
-    // build frontend-friendly shape
-    const price = variantsRes.rows.length ? Math.min(...variantsRes.rows.map(v => Number(v.price))) : null;
-    const image = imagesRes.rows.length ? imagesRes.rows[0].image_url : null;
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
 
-    res.status(200).json({ success: true, data: { id: product.product_id, ...product, price, image, variants: variantsRes.rows, images: imagesRes.rows } });
+    // build frontend-friendly shape from the already-joined data
+    const price = product.variants?.length
+      ? Math.min(...product.variants.map((v) => Number(v.price)))
+      : null;
+    const image = product.images?.length ? product.images[0].image_url : null;
+
+    res.status(200).json({
+      success: true,
+      data: { id: product.product_id, ...product, price, image },
+    });
   } catch (error) {
     console.error("Error in getProduct func:", error.message);
     console.error("Error details:", error);
@@ -246,6 +245,31 @@ export const deleteProduct = async (req, res) => {
       `DELETE FROM products WHERE product_id = $1 RETURNING *`,
       [id]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    return res.json({ success: true, message: "Product deleted", data: result.rows[0] });
+  } catch (err) {
+    console.error("deleteProduct error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const searchProducts = async (req, res) => {
+  try {
+    const { q, category_id, store_id, min_price, max_price, in_stock, sort, page = 1, limit = 20 } = req.query;
+
+    const params = [];
+    const where = [];
+
+    const categoryId = category_id ? Number(category_id) : null;
+    const storeId = store_id ? Number(store_id) : null;
+    const minPrice = min_price !== undefined ? parseFloat(min_price) : null;
+    const maxPrice = max_price !== undefined ? parseFloat(max_price) : null;
+    const inStock = in_stock === "true" ? true : in_stock === "false" ? false : null;
+    const offset = (Number(page) - 1) * Number(limit);
 
     // only active products by default
     where.push(`p.status = 'active'`);

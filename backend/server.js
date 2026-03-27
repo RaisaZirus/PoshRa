@@ -9,6 +9,13 @@ import productRoutes from "./routes/productRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import addressRoutes from "./routes/addressRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
+import sellerRoutes from "./routes/sellerRoutes.js";
+import storeRoutes from "./routes/storeRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
 import { pool } from "./db.js"; // ✅ use your pg Pool (from test.js)
 import { aj } from "./lib/arcjet.js";
 
@@ -21,7 +28,7 @@ app.use(helmet());
 app.use(morgan("dev"));
 
 
-// Apply arcjet to all routes
+
 app.use(async (req, res, next) => {
   try {
     const decision = await aj.protect(req, { requested: 1 });
@@ -54,13 +61,19 @@ app.use("/api/products", productRoutes);
 app.use("/api/account/addresses", addressRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/seller", sellerRoutes);
+app.use("/api/stores", storeRoutes);
+app.use("/api/wishlist", wishlistRoutes);
 
-// ✅ (from test.js) confirm DB is reachable + print server time
 async function checkDBConnection() {
   const res = await pool.query("SELECT NOW() as now;");
   console.log("DB connected. Time:", res.rows[0].now);
 
-  // Optional: show which DB you're connected to (helps debug)
+  
   const info = await pool.query(
     "SELECT current_database() AS db, current_schema() AS schema;"
   );
@@ -71,8 +84,7 @@ async function checkDBConnection() {
       FROM users
       WHERE LOWER(name) = LOWER('Rahima');
     `);
-   // console.log("Tables:", tables.rows.map(r => r.table_name));
-    //check if table loaded successfully
+
     console.log(tables.rows);
     const tableCheck = await pool.query(`
     SELECT table_name 
@@ -102,7 +114,7 @@ async function startServer() {
 
 startServer();
 
-// ✅ graceful shutdown so pool closes properly
+
 process.on("SIGINT", async () => {
   try {
     await pool.end();

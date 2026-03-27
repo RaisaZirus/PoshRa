@@ -1,5 +1,14 @@
 import { pool } from "../db.js";
 
+async function getCustomerId(userId) {
+  const { rows } = await pool.query(
+    "SELECT customer_id FROM customers WHERE user_id = $1",
+    [userId]
+  );
+  if (!rows.length) throw new Error("Customer account not found");
+  return rows[0].customer_id;
+}
+
 // Get or create cart for customer
 async function getOrCreateCart(customer_id) {
   const client = await pool.connect();
@@ -28,7 +37,7 @@ async function getOrCreateCart(customer_id) {
 // GET /api/cart - Get all items in cart
 export async function getCart(req, res) {
   try {
-    const customer_id = req.user?.customer_id || 1; // Default for testing
+    const customer_id = await getCustomerId(req.user.userId);
 
     const result = await pool.query(
       `SELECT 
@@ -85,7 +94,7 @@ export async function getCart(req, res) {
 export async function addItemToCart(req, res) {
   try {
     const { variant_id, quantity } = req.body;
-    const customer_id = req.user?.customer_id || 1; // Default for testing
+    const customer_id = await getCustomerId(req.user.userId);
 
     if (!variant_id || !quantity) {
       return res
@@ -222,7 +231,7 @@ export async function removeCartItem(req, res) {
 // DELETE /api/cart - Clear entire cart
 export async function clearCart(req, res) {
   try {
-    const customer_id = req.user?.customer_id || 1;
+    const customer_id = await getCustomerId(req.user.userId);
 
     const deleteResult = await pool.query(
       "DELETE FROM cart_items WHERE cart_id = (SELECT cart_id FROM carts WHERE customer_id = $1) RETURNING *",

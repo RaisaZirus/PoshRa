@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import axios from "axios";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../../auth/useAuth.jsx";
 
 // HomePage color palette
 const COLORS = {
@@ -29,6 +29,8 @@ function Card({ children, style }) {
 }
 
 export default function CartPage() {
+  const { fetchWithAuth } = useAuth();
+  const navigate = useNavigate();
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -40,10 +42,8 @@ export default function CartPage() {
   const fetchCart = async () => {
     try {
       setLoading(true);
-      const response = await axios.get("/api/cart");
-      if (response.data.success) {
-        setCart(response.data.data);
-      }
+      const data = await fetchWithAuth("/api/cart");
+      if (data.success) setCart(data.data);
     } catch (err) {
       console.error("Error fetching cart:", err);
       setError(err.response?.data?.message || "Failed to load cart");
@@ -55,12 +55,11 @@ export default function CartPage() {
   const updateQuantity = async (cart_item_id, newQuantity) => {
     if (newQuantity < 1) return;
     try {
-      const response = await axios.put(`/api/cart/items/${cart_item_id}`, {
-        quantity: newQuantity,
+      const data = await fetchWithAuth(`/api/cart/items/${cart_item_id}`, {
+        method: "PUT",
+        body: JSON.stringify({ quantity: newQuantity }),
       });
-      if (response.data.success) {
-        fetchCart();
-      }
+      if (data.success) fetchCart();
     } catch (err) {
       console.error("Error updating quantity:", err);
     }
@@ -68,10 +67,8 @@ export default function CartPage() {
 
   const removeItem = async (cart_item_id) => {
     try {
-      const response = await axios.delete(`/api/cart/items/${cart_item_id}`);
-      if (response.data.success) {
-        fetchCart();
-      }
+      const data = await fetchWithAuth(`/api/cart/items/${cart_item_id}`, { method: "DELETE" });
+      if (data.success) fetchCart();
     } catch (err) {
       console.error("Error removing item:", err);
     }
@@ -80,10 +77,8 @@ export default function CartPage() {
   const clearCart = async () => {
     if (window.confirm("Are you sure you want to clear your cart?")) {
       try {
-        const response = await axios.delete("/api/cart");
-        if (response.data.success) {
-          fetchCart();
-        }
+        const data = await fetchWithAuth("/api/cart", { method: "DELETE" });
+        if (data.success) fetchCart();
       } catch (err) {
         console.error("Error clearing cart:", err);
       }
@@ -391,7 +386,7 @@ export default function CartPage() {
                     letterSpacing: 0.2,
                     marginBottom: 8,
                   }}
-                  onClick={() => alert("Checkout coming soon!")}
+                  onClick={() => navigate("/checkout")}
                 >
                   PROCEED TO CHECKOUT
                 </button>

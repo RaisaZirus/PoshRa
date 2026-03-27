@@ -22,7 +22,10 @@ function authMiddleware(req, res, next) {
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT address_id, city, area, details, is_default, created_at FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC`,
+      `SELECT address_id, city, area, details, is_default, created_at 
+      FROM addresses 
+      WHERE user_id = $1 
+      ORDER BY is_default DESC, created_at DESC`,
       [req.user.userId]
     );
     res.status(200).json({ success: true, data: result.rows });
@@ -35,6 +38,9 @@ router.get("/", authMiddleware, async (req, res) => {
 // POST /api/account/addresses
 router.post("/", authMiddleware, async (req, res) => {
   const { city, area, details, is_default } = req.body;
+  if (!city?.trim()) {
+    return res.status(400).json({ success: false, message: "City is required" });
+  }
   try {
     const client = await pool.connect();
     try {
@@ -65,6 +71,9 @@ router.put("/:id", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ success: false, message: "Invalid id" });
   const { city, area, details, is_default } = req.body;
+  if (!city?.trim()) {
+    return res.status(400).json({ success: false, message: "City is required" });
+  }
   try {
     const client = await pool.connect();
     try {

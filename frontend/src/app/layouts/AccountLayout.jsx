@@ -8,6 +8,7 @@ export default function AccountLayout() {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <NavLink to="/account/profile">Profile</NavLink>
           <NavLink to="/account/addresses">Addresses</NavLink>
+          <NavLink to="/orders">Orders</NavLink>
           <NavLink to="/account/wishlists">Wishlists</NavLink>
           <NavLink to="/account/notifications">Notifications</NavLink>
           <NavLink to="/account/conversations">Conversations</NavLink>
