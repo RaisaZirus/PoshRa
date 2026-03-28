@@ -1,4 +1,5 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import {
   getCart,
   addItemToCart,
@@ -9,19 +10,24 @@ import {
 
 const router = express.Router();
 
-// GET /api/cart - Get all items
+function authMiddleware(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const m = auth.match(/^Bearer\s+(.*)$/i);
+  if (!m) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  try {
+    req.user = jwt.verify(m[1], process.env.JWT_ACCESS_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+}
+
+router.use(authMiddleware);
+
 router.get('/', getCart);
-
-// POST /api/cart/items - Add item
 router.post('/items', addItemToCart);
-
-// PUT /api/cart/items/:cart_item_id - Update quantity
 router.put('/items/:cart_item_id', updateCartItem);
-
-// DELETE /api/cart/items/:cart_item_id - Remove item
 router.delete('/items/:cart_item_id', removeCartItem);
-
-// DELETE /api/cart - Clear entire cart
 router.delete('/', clearCart);
 
 export default router;

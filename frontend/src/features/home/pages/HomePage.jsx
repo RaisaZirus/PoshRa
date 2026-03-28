@@ -1,6 +1,7 @@
 // src/features/home/pages/HomePage.jsx
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../../auth/useAuth.jsx";
 
 /**
  * PoshRa Home Page (Multivendor E-commerce)
@@ -61,9 +62,9 @@ const MOCK = {
       start_time: new Date(Date.now() - 86400000).toISOString(),
       end_time: new Date(Date.now() + 6 * 86400000).toISOString(),
       highlights: [
-        { variant_id: 101, product_id: 11, name: "Wireless Earbuds", discount_price: 1499 },
-        { variant_id: 102, product_id: 12, name: "Classic Hoodie", discount_price: 899 },
-        { variant_id: 103, product_id: 13, name: "Smart Watch", discount_price: 2499 },
+        { variant_id: 1, product_id: 1, name: "Red Shirt", discount_price: 799 },
+        { variant_id: 2, product_id: 2, name: "Blue Jeans", discount_price: 1299 },
+        { variant_id: 3, product_id: 3, name: "Black Shoes", discount_price: 1699 },
       ],
     },
   ],
@@ -83,48 +84,44 @@ const MOCK = {
   ],
   products: [
     {
-      product_id: 11,
-      store_id: 201,
-      name: "Wireless Earbuds",
-      brand: "PoshSound",
-      category_slug: "audio",
-      image_url: "https://picsum.photos/seed/poshra-earbuds/640/480",
-      min_price: 1999,
-      discount_price: 1499,
-      stock: 28,
-    },
-    {
-      product_id: 12,
-      store_id: 202,
-      name: "Classic Hoodie",
+      product_id: 1,
+      store_id: 1,
+      name: "Red Shirt",
       brand: "PoshWear",
-      category_slug: "fashion",
-      image_url: "https://picsum.photos/seed/poshra-hoodie/640/480",
-      min_price: 1099,
-      discount_price: 899,
-      stock: 54,
+      image_url: "https://picsum.photos/seed/poshra-shirt/640/480",
+      min_price: 999,
+      discount_price: 799,
+      stock: 20,
     },
     {
-      product_id: 13,
-      store_id: 201,
-      name: "Smart Watch",
-      brand: "PoshFit",
-      category_slug: "wearables",
-      image_url: "https://picsum.photos/seed/poshra-watch/640/480",
-      min_price: 2999,
-      discount_price: 2499,
-      stock: 12,
-    },
-    {
-      product_id: 14,
-      store_id: 203,
-      name: "Minimal Desk Lamp",
-      brand: "NestLite",
-      category_slug: "home-living",
-      image_url: "https://picsum.photos/seed/poshra-lamp/640/480",
-      min_price: 799,
+      product_id: 2,
+      store_id: 1,
+      name: "Blue Jeans",
+      brand: "PoshWear",
+      image_url: "https://picsum.photos/seed/poshra-jeans/640/480",
+      min_price: 1499,
       discount_price: null,
-      stock: 33,
+      stock: 15,
+    },
+    {
+      product_id: 3,
+      store_id: 1,
+      name: "Black Shoes",
+      brand: "PoshStep",
+      image_url: "https://picsum.photos/seed/poshra-shoes/640/480",
+      min_price: 1999,
+      discount_price: 1699,
+      stock: 8,
+    },
+    {
+      product_id: 4,
+      store_id: 1,
+      name: "White T-Shirt",
+      brand: "PoshWear",
+      image_url: "https://picsum.photos/seed/poshra-tshirt/640/480",
+      min_price: 599,
+      discount_price: null,
+      stock: 50,
     },
   ],
 };
@@ -194,7 +191,7 @@ function Card({ children, style }) {
   );
 }
 
-function ProductCard({ p }) {
+function ProductCard({ p, onAddToCart }) {
   const hasDiscount = p.discount_price != null && Number(p.discount_price) < Number(p.min_price);
 
   return (
@@ -207,9 +204,10 @@ function ProductCard({ p }) {
             loading="lazy"
             style={{ width: "100%", height: 170, objectFit: "cover", background: COLORS.soft }}
           />
-          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {hasDiscount ? <Pill>Sale</Pill> : null}
-            {p.stock <= 10 ? <Pill>Low stock</Pill> : null}
+          <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {hasDiscount && <Pill>Sale</Pill>}
+            {Number(p.stock) > 0 && Number(p.stock) <= 5 && <Pill>Only {p.stock} left</Pill>}
+            {Number(p.total_sold) >= 50 && <span style={{ display:"inline-flex",alignItems:"center",padding:"4px 8px",borderRadius:999,background:"#ede9fe",color:"#7c3aed",fontSize:11,fontWeight:800 }}>Bestseller</span>}
           </div>
         </div>
         <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -236,8 +234,7 @@ function ProductCard({ p }) {
             type="button"
             onClick={(e) => {
               e.preventDefault();
-              // Hook this to POST /cart/items (carts + cart_items)
-              alert(`Add to cart: product_id=${p.product_id}`);
+              onAddToCart(p.product_id);
             }}
             style={{
               cursor: "pointer",
@@ -458,8 +455,44 @@ function CampaignHero({ campaign }) {
 }
 
 // ---- main page ----
+function SellerLink() {
+  const { user } = useAuth();
+  if (user?.role === "seller") {
+    return (
+      <a href="/seller/dashboard" style={{ textDecoration: "none", fontWeight: 900, color: COLORS.ink, background: COLORS.primary, border: `2px solid ${COLORS.ink}`, padding: "10px 14px", borderRadius: 14 }}>
+        My dashboard
+      </a>
+    );
+  }
+  return (
+    <a href="/auth/register" style={{ textDecoration: "none", fontWeight: 900, color: COLORS.ink, background: COLORS.primary, border: `2px solid ${COLORS.ink}`, padding: "10px 14px", borderRadius: 14 }}>
+      Sell on PoshRa
+    </a>
+  );
+}
+
 export default function HomePage() {
   const [loading, setLoading] = React.useState(true);
+  const { fetchWithAuth, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleAddToCart = async (productId) => {
+    if (!user) { navigate("/auth/login"); return; }
+    try {
+      // We need a variant_id — fetch the first variant for this product
+      const res = await fetch(`/api/products/${productId}`);
+      const data = await res.json();
+      const variant = data?.data?.variants?.[0];
+      if (!variant) { alert("No variant available"); return; }
+      await fetchWithAuth("/api/cart/items", {
+        method: "POST",
+        body: JSON.stringify({ variant_id: variant.variant_id, quantity: 1 }),
+      });
+      navigate("/cart");
+    } catch (err) {
+      alert(err.message || "Failed to add to cart");
+    }
+  };
 
   const [campaigns, setCampaigns] = React.useState([]);
   const [categories, setCategories] = React.useState([]);
@@ -477,15 +510,15 @@ export default function HomePage() {
       const [camps, cats, sts, prods] = await Promise.all([
         safeFetchJSON("/api/campaigns/active", MOCK.campaigns),
         safeFetchJSON("/api/categories", MOCK.categories),
-        safeFetchJSON("/api/stores/top", MOCK.stores),
+        safeFetchJSON("/api/stores", MOCK.stores),
         // ideally returns products with image + min price + discount info
-        safeFetchJSON("/api/products/featured", MOCK.products),
+        safeFetchJSON("/api/products/featured", MOCK.products).then(r => Array.isArray(r) ? r : (r?.data ?? MOCK.products)),
       ]);
 
       if (!alive) return;
       setCampaigns(Array.isArray(camps) ? camps : MOCK.campaigns);
-      setCategories(Array.isArray(cats) ? cats : MOCK.categories);
-      setStores(Array.isArray(sts) ? sts : MOCK.stores);
+      setCategories((Array.isArray(cats) && cats.length > 0) ? cats : MOCK.categories);
+      setStores((Array.isArray(sts) && sts.length > 0) ? sts : MOCK.stores);
       setProducts(Array.isArray(prods) ? prods : MOCK.products);
 
       setLoading(false);
@@ -555,20 +588,7 @@ export default function HomePage() {
             >
               Start shopping
             </Link>
-            <Link
-              to="/seller/dashboard"
-              style={{
-                textDecoration: "none",
-                fontWeight: 900,
-                color: COLORS.ink,
-                background: COLORS.primary,
-                border: `2px solid ${COLORS.ink}`,
-                padding: "10px 14px",
-                borderRadius: 14,
-              }}
-            >
-              Sell on PoshRa
-            </Link>
+            <SellerLink />
           </div>
         </div>
       </div>
@@ -592,7 +612,7 @@ export default function HomePage() {
       {/* categories */}
       <Section
         title="Shop by category"
-        subtitle="Powered by categories.parent_id + slug"
+        subtitle="Browse our collections"
         action={
           <Link
             to="/search?q="
@@ -616,7 +636,7 @@ export default function HomePage() {
       {/* featured products */}
       <Section
         title="Featured products"
-        subtitle="products + product_images + product_variants (price/discount/stock)"
+        subtitle="Hand-picked for you"
         action={
           <Link
             to="/search?q=&sort=new"
@@ -634,7 +654,7 @@ export default function HomePage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 12 }}>
           {products.slice(0, 8).map((p) => (
             <div key={p.product_id} style={{ gridColumn: "span 3" }}>
-              <ProductCard p={p} />
+              <ProductCard p={p} onAddToCart={handleAddToCart} />
             </div>
           ))}
         </div>
@@ -643,7 +663,7 @@ export default function HomePage() {
       {/* top stores */}
       <Section
         title="Top stores"
-        subtitle="stores + sellers (multivendor)"
+        subtitle="Shop from trusted sellers"
         action={
           <Link
             to="/search?q=&sort=rating"
@@ -666,9 +686,9 @@ export default function HomePage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 12 }}>
           {[
             { title: "Multi-vendor", text: "Shop products from many stores in one checkout." },
-            { title: "Campaign deals", text: "campaigns + campaign_products power seasonal discounts." },
-            { title: "Secure payments", text: "orders + payments + refunds keep everything traceable." },
-            { title: "Fast delivery", text: "seller_orders + shipments + couriers for fulfillment tracking." },
+            { title: "Campaign deals", text: "Exclusive deals and seasonal discounts every week." },
+            { title: "Secure payments", text: "Every transaction is safe, traceable and refundable." },
+            { title: "Fast delivery", text: "Real-time shipment tracking from seller to your door." },
           ].map((x) => (
             <Card key={x.title} style={{ gridColumn: "span 3", padding: 14, background: COLORS.bg }}>
               <div style={{ fontSize: 14, fontWeight: 1000, color: COLORS.ink }}>{x.title}</div>

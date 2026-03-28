@@ -45,8 +45,32 @@ async function ensureRoleRow(client, userId, role) {
 router.post("/register", async (req, res) => {
   const { name, email, phone, password, role } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ success: false, message: "name, email, password required" });
+  // Name: 2–50 characters
+  if (!name?.trim() || name.trim().length < 2) {
+    return res.status(400).json({ success: false, message: "Name must be at least 2 characters" });
+  }
+  if (name.trim().length > 50) {
+    return res.status(400).json({ success: false, message: "Name must be 50 characters or less" });
+  }
+
+  // Email: valid format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email?.trim() || !emailRegex.test(email.trim())) {
+    return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+  }
+
+  // Phone: valid Bangladeshi number (optional but validated if provided)
+  // Formats: 01XXXXXXXXX (11 digits) or +8801XXXXXXXXX (14 chars)
+  if (phone?.trim()) {
+    const bdPhone = /^(?:\+8801|8801|01)[3-9]\d{8}$/;
+    if (!bdPhone.test(phone.trim().replace(/\s|-/g, ""))) {
+      return res.status(400).json({ success: false, message: "Enter a valid Bangladeshi phone number (e.g. 01XXXXXXXXX)" });
+    }
+  }
+
+  // Password: minimum 6 characters
+  if (!password || password.length < 6) {
+    return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
   }
 
   const finalRole = role || "user";
@@ -227,6 +251,93 @@ router.post("/logout", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Logout error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+
+// GET /api/auth/me — get current user profile
+router.get("/me", async (req, res) => {
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer\s+(.*)$/i);
+  if (!m) return res.status(401).json({ success: false, message: "Unauthorized" });
+  let userId;
+  try { userId = jwt.verify(m[1], process.env.JWT_ACCESS_SECRET).userId; }
+  catch { return res.status(401).json({ success: false, message: "Invalid token" }); }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT user_id, name, email, phone, role, is_active, email_verified, created_at
+       FROM users WHERE user_id = $1`,
+      [userId]
+    );
+    if (!rows.length) return res.status(404).json({ success: false, message: "User not found" });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error("me error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// PATCH /api/auth/me — update name and phone
+router.patch("/me", async (req, res) => {
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer\s+(.*)$/i);
+  if (!m) return res.status(401).json({ success: false, message: "Unauthorized" });
+  let userId;
+  try { userId = jwt.verify(m[1], process.env.JWT_ACCESS_SECRET).userId; }
+  catch { return res.status(401).json({ success: false, message: "Invalid token" }); }
+
+  const { name, phone } = req.body;
+  if (!name?.trim()) return res.status(400).json({ success: false, message: "Name is required" });
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET name = $1, phone = $2, updated_at = NOW()
+       WHERE user_id = $3
+       RETURNING user_id, name, email, phone, role, created_at`,
+      [name.trim(), phone?.trim() || null, userId]
+    );
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    if (err.code === "23505") return res.status(409).json({ success: false, message: "Phone number already in use" });
+    console.error("update me error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// PATCH /api/auth/change-password
+router.patch("/change-password", async (req, res) => {
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer\s+(.*)$/i);
+  if (!m) return res.status(401).json({ success: false, message: "Unauthorized" });
+  let userId;
+  try { userId = jwt.verify(m[1], process.env.JWT_ACCESS_SECRET).userId; }
+  catch { return res.status(401).json({ success: false, message: "Invalid token" }); }
+
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ success: false, message: "current_password and new_password required" });
+  }
+  if (new_password.length < 6) {
+    return res.status(400).json({ success: false, message: "New password must be at least 6 characters" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      "SELECT password_hash FROM users WHERE user_id = $1", [userId]
+    );
+    const ok = await bcrypt.compare(current_password, rows[0].password_hash);
+    if (!ok) return res.status(401).json({ success: false, message: "Current password is incorrect" });
+
+    const newHash = await bcrypt.hash(new_password, 10);
+    await pool.query(
+      "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2",
+      [newHash, userId]
+    );
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    console.error("change password error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });

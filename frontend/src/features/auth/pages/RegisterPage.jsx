@@ -92,9 +92,31 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
-    if (!name.trim() || !email.trim() || !password) {
-      setError("Name, email and password are required.");
-      return;
+    // Name: 2–50 characters
+    if (!name.trim() || name.trim().length < 2) {
+      setError("Name must be at least 2 characters."); return;
+    }
+    if (name.trim().length > 50) {
+      setError("Name must be 50 characters or less."); return;
+    }
+
+    // Email: valid format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) {
+      setError("Please enter a valid email address."); return;
+    }
+
+    // Phone: valid Bangladeshi number if provided
+    if (phone.trim()) {
+      const bdPhone = /^(?:\+8801|8801|01)[3-9]\d{8}$/;
+      if (!bdPhone.test(phone.trim().replace(/\s|-/g, ""))) {
+        setError("Enter a valid Bangladeshi phone number (e.g. 01XXXXXXXXX)."); return;
+      }
+    }
+
+    // Password: minimum 6 characters
+    if (!password || password.length < 6) {
+      setError("Password must be at least 6 characters."); return;
     }
 
     setSubmitting(true);
@@ -124,7 +146,7 @@ export default function RegisterPage() {
           <div style={{ fontSize: 12, fontWeight: 1100, color: COLORS.olive, letterSpacing: 1 }}>POSHRA</div>
           <h1 style={{ margin: "6px 0 0", fontSize: 20, fontWeight: 1200 }}>Create your account</h1>
           <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "rgba(32,29,24,0.75)" }}>
-            Stored in <b>users</b> (role, phone, email, password_hash…)
+            Join thousands of shoppers and sellers
           </div>
         </div>
 

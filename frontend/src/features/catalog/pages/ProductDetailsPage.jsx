@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useAuth } from "../../../auth/useAuth.jsx";
 
 // HomePage color palette
 const COLORS = {
@@ -52,6 +53,7 @@ function Card({ children, style }) {
 
 export default function ProductDetailsPage() {
   const { product_id } = useParams();
+  const { fetchWithAuth, user } = useAuth();
     const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -60,6 +62,21 @@ export default function ProductDetailsPage() {
   const [activeTab, setActiveTab] = useState("description");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [wishlisted, setWishlisted] = useState(false);
+  const [questions, setQuestions] = React.useState([]);
+  const [qnaLoading, setQnaLoading] = React.useState(false);
+  const [qnaLoaded, setQnaLoaded] = React.useState(false);
+  const [newQuestion, setNewQuestion] = React.useState("");
+  const [postingQ, setPostingQ] = React.useState(false);
+  const [reviews, setReviews] = React.useState([]);
+  const [breakdown, setBreakdown] = React.useState({});
+  const [reviewsLoaded, setReviewsLoaded] = React.useState(false);
+  const [reviewsLoading, setReviewsLoading] = React.useState(false);
+  const [newRating, setNewRating] = React.useState(0);
+  const [hoverRating, setHoverRating] = React.useState(0);
+  const [newComment, setNewComment] = React.useState("");
+  const [postingReview, setPostingReview] = React.useState(false);
+  const [reviewError, setReviewError] = React.useState("");
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -127,17 +144,20 @@ export default function ProductDetailsPage() {
 
   const handleAddToCart = async () => {
     if (!selectedVariant) return;
+    if (!user) {
+      navigate("/auth/login", { state: { from: `/p/${product_id}` } });
+      return;
+    }
     try {
-      const payload = { variant_id: selectedVariant.variant_id, quantity };
-      const res = await axios.post("/api/cart/items", payload);
-      if (res.data.success) {
-        navigate("/cart");
-      } else {
-        alert(res.data.message || "Failed to add to cart");
-      }
+      const data = await fetchWithAuth("/api/cart/items", {
+        method: "POST",
+        body: JSON.stringify({ variant_id: selectedVariant.variant_id, quantity }),
+      });
+      if (data.success) navigate("/cart");
+      else alert(data.message || "Failed to add to cart");
     } catch (err) {
       console.error("Add to cart failed:", err);
-      alert(err.response?.data?.message || "Add to cart failed");
+      alert(err.message || "Add to cart failed");
     }
   };
 
@@ -236,20 +256,27 @@ export default function ProductDetailsPage() {
                 </h1>
 
                 {/* Rating */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-                  <div style={{ display: "flex", gap: 2 }}>
-                    {[...Array(5)].map((_, i) => (
-                      <span key={i} style={{ fontSize: 16 }}>⭐</span>
-                    ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+                    {product.reviews_count > 0 ? (
+                      <>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} style={{ fontSize: 16, color: i < Math.round(product.avg_rating) ? "#FEE32B" : "#D3D1C7" }}>★</span>
+                          ))}
+                        </div>
+                        <span style={{ fontSize: 13, color: COLORS.olive }}>{product.avg_rating} ({product.reviews_count} review{product.reviews_count !== 1 ? "s" : ""})</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 13, color: COLORS.olive }}>No reviews yet</span>
+                    )}
                   </div>
-                  <span style={{ fontSize: 13, color: COLORS.olive }}>4.5 (128 reviews)</span>
-                </div>
 
                 {/* Seller */}
-                <p style={{ fontSize: 13, marginTop: 8, color: COLORS.olive }}
-                >
-                  Sold by <Link to={`/s/${product.store_slug || 'store'}`} style={{ textDecoration: "underline", color: COLORS.olive, fontWeight: 700 }}>{product.store_name || 'Store'}</Link>
-                </p>
+                  {product.store_name && (
+                    <p style={{ fontSize: 13, marginTop: 8, color: COLORS.olive }}>
+                      Sold by <Link to={`/s/${product.store_slug}`} style={{ textDecoration: "underline", color: COLORS.olive, fontWeight: 700 }}>{product.store_name}</Link>
+                    </p>
+                  )}
               </div>
 
               {/* Price Section */}
@@ -279,14 +306,32 @@ export default function ProductDetailsPage() {
                 )}
               </div>
 
-              {/* Stock Status */}
-              <div style={{ marginTop: 16 }}>
-                {selectedVariant?.stock > 0 ? (
-                  <p style={{ fontSize: 14, fontWeight: 700, color: "#16a34a" }}>
-                    ✓ In Stock ({selectedVariant.stock} available)
-                  </p>
-                ) : (
-                  <p style={{ fontSize: 14, fontWeight: 700, color: "#dc2626" }}>Out of Stock</p>
+              {/* Stock & sold status */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+                {selectedVariant?.stock <= 0 && (
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#dc2626", background: "#fee2e2", padding: "4px 10px", borderRadius: 8 }}>
+                    Out of stock
+                  </span>
+                )}
+                {selectedVariant?.stock > 0 && selectedVariant?.stock <= 5 && (
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#d97706", background: "#fef9c3", padding: "4px 10px", borderRadius: 8 }}>
+                    Only {selectedVariant.stock} left
+                  </span>
+                )}
+                {selectedVariant?.stock > 5 && (
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#16a34a", background: "#dcfce7", padding: "4px 10px", borderRadius: 8 }}>
+                    In stock
+                  </span>
+                )}
+                {product.total_sold >= 50 && (
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#7c3aed", background: "#ede9fe", padding: "4px 10px", borderRadius: 8 }}>
+                    Bestseller
+                  </span>
+                )}
+                {product.total_sold >= 10 && product.total_sold < 50 && (
+                  <span style={{ fontSize: 13, fontWeight: 800, color: COLORS.olive, background: COLORS.soft, padding: "4px 10px", borderRadius: 8 }}>
+                    Popular
+                  </span>
                 )}
               </div>
 
@@ -322,7 +367,7 @@ export default function ProductDetailsPage() {
                         }}
                       >
                         <span>{variant.sku}</span>
-                        <span>₹{variant.discount_price || variant.price} • {variant.stock}x</span>
+                        <span>₹{variant.discount_price || variant.price}</span>
                       </button>
                     ))}
                   </div>
@@ -409,27 +454,31 @@ export default function ProductDetailsPage() {
                   ADD TO CART
                 </button>
                 <button
+                  onClick={async () => {
+                    if (!user) { navigate("/auth/login"); return; }
+                    if (!selectedVariant) return;
+                    try {
+                      if (wishlisted) {
+                        await fetchWithAuth(`/api/wishlist/items/${selectedVariant.variant_id}`, { method: "DELETE" });
+                        setWishlisted(false);
+                      } else {
+                        await fetchWithAuth("/api/wishlist/items", {
+                          method: "POST",
+                          body: JSON.stringify({ variant_id: selectedVariant.variant_id }),
+                        });
+                        setWishlisted(true);
+                      }
+                    } catch (err) { alert(err.message); }
+                  }}
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    border: `2px solid ${COLORS.olive}`,
-                    background: COLORS.bg,
-                    color: COLORS.olive,
-                    fontSize: 18,
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = COLORS.olive;
-                    e.currentTarget.style.color = COLORS.bg;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = COLORS.bg;
-                    e.currentTarget.style.color = COLORS.olive;
+                    width: 44, height: 44, borderRadius: 12,
+                    border: `2px solid ${wishlisted ? "#dc2626" : COLORS.olive}`,
+                    background: wishlisted ? "#fee2e2" : COLORS.bg,
+                    color: wishlisted ? "#dc2626" : COLORS.olive,
+                    fontSize: 18, cursor: "pointer", transition: "all 0.2s",
                   }}
                 >
-                  ♡
+                  {wishlisted ? "♥" : "♡"}
                 </button>
               </div>
 
@@ -454,10 +503,36 @@ export default function ProductDetailsPage() {
                 borderBottom: `1px solid rgba(32,29,24,0.12)`,
               }}
             >
-              {["description", "specs", "reviews"].map((tab) => (
+              {["description", "specs", "reviews", "questions"].map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => {
+                    setActiveTab(tab);
+                    if (tab === "questions" && !qnaLoaded) {
+                      setQnaLoading(true);
+                      fetch(`/api/products/${product_id}/questions`)
+                        .then((r) => r.json())
+                        .then((d) => { setQuestions(d.data || []); setQnaLoaded(true); })
+                        .catch(console.error)
+                        .finally(() => setQnaLoading(false));
+                    }
+                    if (tab === "reviews" && !reviewsLoaded) {
+                      setReviewsLoading(true);
+                      fetch(`/api/products/${product_id}/reviews`)
+                        .then((r) => r.json())
+                        .then((d) => { setReviews(d.data || []); setBreakdown(d.breakdown || {}); setReviewsLoaded(true); })
+                        .catch(console.error)
+                        .finally(() => setReviewsLoading(false));
+                    }
+                    if (tab === "reviews" && !reviewsLoaded) {
+                      setReviewsLoading(true);
+                      fetch(`/api/products/${product_id}/reviews`)
+                        .then((r) => r.json())
+                        .then((d) => { setReviews(d.data || []); setReviewBreakdown(d.breakdown || {}); setReviewsLoaded(true); })
+                        .catch(console.error)
+                        .finally(() => setReviewsLoading(false));
+                    }
+                  }}
                   style={{
                     padding: "16px 14px",
                     border: "none",
@@ -474,6 +549,7 @@ export default function ProductDetailsPage() {
                   {tab === "description" && "Description"}
                   {tab === "specs" && "Specifications"}
                   {tab === "reviews" && "Reviews"}
+                  {tab === "questions" && "Q&A"}
                 </button>
               ))}
             </div>
@@ -508,7 +584,189 @@ export default function ProductDetailsPage() {
                 )
               )}
               {activeTab === "reviews" && (
-                <p style={{ color: COLORS.olive }}>Be the first to review this product.</p>
+                <div>
+                  {/* Rating breakdown */}
+                  {reviews.length > 0 && (
+                    <div style={{ display: "flex", gap: 20, marginBottom: 24, flexWrap: "wrap" }}>
+                      <div style={{ textAlign: "center" }}>
+                        <p style={{ fontSize: 48, fontWeight: 900, color: COLORS.ink, margin: 0, lineHeight: 1 }}>{product.avg_rating}</p>
+                        <div style={{ display: "flex", gap: 2, justifyContent: "center", margin: "6px 0" }}>
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} style={{ fontSize: 16, color: i < Math.round(product.avg_rating) ? COLORS.primary : "#D3D1C7" }}>★</span>
+                          ))}
+                        </div>
+                        <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>{product.reviews_count} review{product.reviews_count !== 1 ? "s" : ""}</p>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 180 }}>
+                        {[5,4,3,2,1].map((star) => {
+                          const count = breakdown[star] || 0;
+                          const pct = reviews.length ? Math.round((count / reviews.length) * 100) : 0;
+                          return (
+                            <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <span style={{ fontSize: 12, color: COLORS.olive, width: 8 }}>{star}</span>
+                              <span style={{ fontSize: 13, color: COLORS.primary }}>★</span>
+                              <div style={{ flex: 1, height: 6, background: "rgba(32,29,24,0.1)", borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{ width: `${pct}%`, height: "100%", background: COLORS.primary, borderRadius: 3 }} />
+                              </div>
+                              <span style={{ fontSize: 11, color: COLORS.olive, width: 24, textAlign: "right" }}>{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Write a review */}
+                  {user && (
+                    <div style={{ background: COLORS.soft, borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                      <p style={{ fontWeight: 800, fontSize: 13, color: COLORS.ink, margin: "0 0 10px" }}>Write a review</p>
+                      {/* Star picker */}
+                      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+                        {[1,2,3,4,5].map((s) => (
+                          <span key={s}
+                            onMouseEnter={() => setHoverRating(s)}
+                            onMouseLeave={() => setHoverRating(0)}
+                            onClick={() => setNewRating(s)}
+                            style={{ fontSize: 28, cursor: "pointer", color: s <= (hoverRating || newRating) ? COLORS.primary : "#D3D1C7", transition: "color 0.1s" }}>
+                            ★
+                          </span>
+                        ))}
+                        {newRating > 0 && (
+                          <span style={{ fontSize: 13, color: COLORS.olive, alignSelf: "center", marginLeft: 6 }}>
+                            {["","Terrible","Poor","Okay","Good","Excellent"][newRating]}
+                          </span>
+                        )}
+                      </div>
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Share your experience (optional)..."
+                        rows={3}
+                        style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1.5px solid rgba(32,29,24,0.2)`, fontSize: 13, resize: "vertical", fontFamily: "system-ui", boxSizing: "border-box" }}
+                      />
+                      {reviewError && <p style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, margin: "6px 0 0" }}>{reviewError}</p>}
+                      <button
+                        disabled={postingReview || !newRating}
+                        onClick={async () => {
+                          if (!newRating) { setReviewError("Please select a rating"); return; }
+                          setPostingReview(true); setReviewError("");
+                          try {
+                            const data = await fetchWithAuth(`/api/products/${product_id}/reviews`, {
+                              method: "POST",
+                              body: JSON.stringify({ rating: newRating, comment: newComment }),
+                            });
+                            setReviews((prev) => [data.data, ...prev]);
+                            setReviewBreakdown((prev) => ({ ...prev, [newRating]: (prev[newRating] || 0) + 1 }));
+                            setNewRating(0); setNewComment("");
+                          } catch (err) { setReviewError(err.message); }
+                          finally { setPostingReview(false); }
+                        }}
+                        style={{ marginTop: 10, padding: "10px 20px", background: newRating ? COLORS.primary : "rgba(32,29,24,0.1)", color: newRating ? COLORS.ink : COLORS.olive, fontWeight: 900, fontSize: 13, borderRadius: 10, border: "none", cursor: newRating ? "pointer" : "not-allowed" }}
+                      >
+                        {postingReview ? "Posting..." : "Post review"}
+                      </button>
+                    </div>
+                  )}
+                  {!user && (
+                    <p style={{ fontSize: 13, color: COLORS.olive, marginBottom: 16 }}>
+                      <a href="/auth/login" style={{ color: COLORS.olive, fontWeight: 800 }}>Login</a> to write a review.
+                    </p>
+                  )}
+
+                  {/* Reviews list */}
+                  {reviewsLoading ? (
+                    <p style={{ color: COLORS.olive, fontSize: 13 }}>Loading reviews...</p>
+                  ) : reviews.length === 0 ? (
+                    <p style={{ color: COLORS.olive, fontSize: 13 }}>No reviews yet. Be the first!</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {reviews.map((r) => (
+                        <div key={r.review_id} style={{ borderBottom: `1px solid rgba(32,29,24,0.08)`, paddingBottom: 16 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                            <div>
+                              <p style={{ fontWeight: 800, fontSize: 13, color: COLORS.ink, margin: "0 0 4px" }}>{r.customer_name}</p>
+                              <div style={{ display: "flex", gap: 2 }}>
+                                {[...Array(5)].map((_, i) => (
+                                  <span key={i} style={{ fontSize: 14, color: i < r.rating ? COLORS.primary : "#D3D1C7" }}>★</span>
+                                ))}
+                              </div>
+                            </div>
+                            <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>
+                              {new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          </div>
+                          {r.comment && <p style={{ fontSize: 13, color: COLORS.ink, margin: 0, lineHeight: 1.6 }}>{r.comment}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {activeTab === "questions" && (
+                <div>
+                  {/* Ask a question */}
+                  {user ? (
+                    <div style={{ marginBottom: 20, display: "flex", gap: 8 }}>
+                      <input
+                        value={newQuestion}
+                        onChange={(e) => setNewQuestion(e.target.value)}
+                        placeholder="Ask a question about this product..."
+                        style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: `1.5px solid rgba(32,29,24,0.2)`, fontSize: 13 }}
+                      />
+                      <button
+                        disabled={postingQ || !newQuestion.trim()}
+                        onClick={async () => {
+                          if (!newQuestion.trim()) return;
+                          setPostingQ(true);
+                          try {
+                            const data = await fetchWithAuth(`/api/products/${product_id}/questions`, {
+                              method: "POST",
+                              body: JSON.stringify({ content: newQuestion.trim() }),
+                            });
+                            setQuestions((prev) => [{ ...data.data, question: data.data.content, customer_name: user.name, answer: null }, ...prev]);
+                            setNewQuestion("");
+                          } catch (err) { alert(err.message); }
+                          finally { setPostingQ(false); }
+                        }}
+                        style={{ padding: "10px 18px", background: COLORS.primary, color: COLORS.ink, fontWeight: 900, fontSize: 13, borderRadius: 10, border: "none", cursor: "pointer" }}
+                      >
+                        {postingQ ? "..." : "Ask"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 13, color: COLORS.olive, marginBottom: 16 }}>
+                      <a href="/auth/login" style={{ color: COLORS.olive, fontWeight: 800 }}>Login</a> to ask a question.
+                    </p>
+                  )}
+
+                  {/* Questions list */}
+                  {qnaLoading ? (
+                    <p style={{ color: COLORS.olive, fontSize: 13 }}>Loading questions...</p>
+                  ) : questions.length === 0 ? (
+                    <p style={{ color: COLORS.olive, fontSize: 13 }}>No questions yet. Be the first to ask!</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {questions.map((q) => (
+                        <div key={q.question_id} style={{ borderLeft: `3px solid ${COLORS.primary}`, paddingLeft: 14 }}>
+                          <p style={{ fontWeight: 800, fontSize: 14, color: COLORS.ink, margin: "0 0 4px" }}>{q.question}</p>
+                          <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 8px" }}>
+                            {q.customer_name} · {new Date(q.created_at).toLocaleDateString("en-IN")}
+                          </p>
+                          {q.answer ? (
+                            <div style={{ background: "#FBEF9C", borderRadius: 8, padding: "10px 12px" }}>
+                              <p style={{ fontSize: 12, fontWeight: 800, color: COLORS.olive, margin: "0 0 4px" }}>
+                                Seller answer · {new Date(q.answered_at).toLocaleDateString("en-IN")}
+                              </p>
+                              <p style={{ fontSize: 13, color: COLORS.ink, margin: 0 }}>{q.answer}</p>
+                            </div>
+                          ) : (
+                            <p style={{ fontSize: 12, color: COLORS.olive, fontStyle: "italic" }}>Awaiting seller response...</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </Card>
@@ -536,4 +794,3 @@ export default function ProductDetailsPage() {
     </div>
   );
 }
-

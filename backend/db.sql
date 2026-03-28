@@ -507,3 +507,515 @@ CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_user_id
 
 CREATE INDEX IF NOT EXISTS idx_recommendation_feedback_product_id
   ON recommendation_feedback(product_id);
+-- =============================================================================
+-- db_extensions.sql
+-- Run this ONCE against your database after db.sql has been applied.
+-- Contains: Triggers, Functions, Procedures, and Complex Query Views
+-- =============================================================================
+
+
+-- =============================================================================
+-- SECTION 1: TRIGGERS
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Trigger 1: Auto-update seller rating when a review is inserted or deleted
+-- Updates sellers.rating by averaging all ratings across all their products.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_update_seller_rating()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE sellers
+  SET rating = (
+    SELECT COALESCE(AVG(r.rating), 0)
+    FROM reviews r
+    JOIN products p    ON p.product_id = r.product_id
+    JOIN stores   st   ON st.store_id  = p.store_id
+    WHERE st.seller_id = (
+      SELECT st2.seller_id
+      FROM products p2
+      JOIN stores st2 ON st2.store_id = p2.store_id
+      WHERE p2.product_id = COALESCE(NEW.product_id, OLD.product_id)
+      LIMIT 1
+    )
+  )
+  WHERE seller_id = (
+    SELECT st3.seller_id
+    FROM products p3
+    JOIN stores st3 ON st3.store_id = p3.store_id
+    WHERE p3.product_id = COALESCE(NEW.product_id, OLD.product_id)
+    LIMIT 1
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_seller_rating ON reviews;
+CREATE TRIGGER trg_update_seller_rating
+AFTER INSERT OR UPDATE OR DELETE ON reviews
+FOR EACH ROW EXECUTE FUNCTION fn_update_seller_rating();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 2: Auto-update store rating when a review is inserted or deleted
+-- Updates stores.store_rating from the average of all reviews on their products.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_update_store_rating()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_store_id BIGINT;
+BEGIN
+  SELECT p.store_id INTO v_store_id
+  FROM products p
+  WHERE p.product_id = COALESCE(NEW.product_id, OLD.product_id)
+  LIMIT 1;
+
+  UPDATE stores
+  SET store_rating = (
+    SELECT COALESCE(AVG(r.rating), 0)
+    FROM reviews r
+    JOIN products p ON p.product_id = r.product_id
+    WHERE p.store_id = v_store_id
+  )
+  WHERE store_id = v_store_id;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_store_rating ON reviews;
+CREATE TRIGGER trg_update_store_rating
+AFTER INSERT OR UPDATE OR DELETE ON reviews
+FOR EACH ROW EXECUTE FUNCTION fn_update_store_rating();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 3: Prevent stock from going negative on product_variants updates
+-- Raises an exception if any UPDATE tries to set stock below 0.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_prevent_negative_stock()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.stock < 0 THEN
+    RAISE EXCEPTION 'Stock cannot go below 0 for variant_id %', NEW.variant_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_negative_stock ON product_variants;
+CREATE TRIGGER trg_prevent_negative_stock
+BEFORE UPDATE OF stock ON product_variants
+FOR EACH ROW EXECUTE FUNCTION fn_prevent_negative_stock();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 4: Log price changes to price_history automatically
+-- Fires whenever a variant's price column is updated.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_log_price_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.price IS DISTINCT FROM OLD.price THEN
+    INSERT INTO price_history (variant_id, price, changed_at)
+    VALUES (NEW.variant_id, NEW.price, NOW());
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_log_price_change ON product_variants;
+CREATE TRIGGER trg_log_price_change
+AFTER UPDATE OF price ON product_variants
+FOR EACH ROW EXECUTE FUNCTION fn_log_price_change();
+
+
+-- =============================================================================
+-- SECTION 2: FUNCTIONS
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Function 1: Get seller revenue summary
+-- Returns total delivered revenue and total orders for a given seller_id.
+-- Usage: SELECT * FROM fn_seller_revenue_summary(1);
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_seller_revenue_summary(p_seller_id BIGINT)
+RETURNS TABLE(
+  total_delivered_orders  INT,
+  total_revenue           NUMERIC,
+  avg_order_value         NUMERIC,
+  total_products          INT,
+  avg_product_rating      NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(so.seller_order_id)::INT                         AS total_delivered_orders,
+    COALESCE(SUM(so.subtotal), 0)                         AS total_revenue,
+    COALESCE(AVG(so.subtotal), 0)                         AS avg_order_value,
+    COUNT(DISTINCT p.product_id)::INT                     AS total_products,
+    COALESCE(AVG(r.rating), 0)                            AS avg_product_rating
+  FROM sellers s
+  LEFT JOIN seller_orders so ON so.seller_id = s.seller_id AND so.status = 'delivered'
+  LEFT JOIN stores st        ON st.seller_id  = s.seller_id
+  LEFT JOIN products p       ON p.store_id    = st.store_id
+  LEFT JOIN reviews r        ON r.product_id  = p.product_id
+  WHERE s.seller_id = p_seller_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- -----------------------------------------------------------------------------
+-- Function 2: Calculate commission owed for a seller order
+-- Returns the commission amount based on the category commission rate.
+-- Usage: SELECT fn_calculate_commission(seller_order_id);
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_calculate_commission(p_seller_order_id BIGINT)
+RETURNS NUMERIC AS $$
+DECLARE
+  v_total_commission NUMERIC := 0;
+  v_item             RECORD;
+  v_rate             NUMERIC;
+BEGIN
+  FOR v_item IN
+    SELECT oi.price, oi.quantity, p.category_id
+    FROM order_items oi
+    JOIN product_variants pv ON pv.variant_id  = oi.variant_id
+    JOIN products p          ON p.product_id   = pv.product_id
+    WHERE oi.seller_order_id = p_seller_order_id
+  LOOP
+    -- Try category-specific rate first, fall back to global (NULL category) rate
+    SELECT percentage INTO v_rate
+    FROM commissions
+    WHERE category_id = v_item.category_id
+    LIMIT 1;
+
+    IF v_rate IS NULL THEN
+      SELECT percentage INTO v_rate
+      FROM commissions
+      WHERE category_id IS NULL
+      LIMIT 1;
+    END IF;
+
+    IF v_rate IS NOT NULL THEN
+      v_total_commission := v_total_commission + (v_item.price * v_item.quantity * v_rate / 100);
+    END IF;
+  END LOOP;
+
+  RETURN ROUND(v_total_commission, 2);
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- -----------------------------------------------------------------------------
+-- Function 3: Get platform-wide sales analytics for a date range
+-- Returns aggregated GMV, orders, new users for reporting.
+-- Usage: SELECT * FROM fn_platform_analytics('2025-01-01', '2025-12-31');
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_platform_analytics(p_from DATE, p_to DATE)
+RETURNS TABLE(
+  total_orders    BIGINT,
+  total_gmv       NUMERIC,
+  total_revenue   NUMERIC,
+  new_users       BIGINT,
+  new_sellers     BIGINT,
+  avg_order_value NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(DISTINCT o.order_id)                            AS total_orders,
+    COALESCE(SUM(o.total_amount), 0)                     AS total_gmv,
+    COALESCE(SUM(fk.commission_total), 0)                AS total_revenue,
+    (SELECT COUNT(*) FROM users   WHERE created_at::date BETWEEN p_from AND p_to)  AS new_users,
+    (SELECT COUNT(*) FROM sellers
+       JOIN users u ON u.user_id = sellers.user_id
+       WHERE u.created_at::date BETWEEN p_from AND p_to) AS new_sellers,
+    COALESCE(AVG(o.total_amount), 0)                     AS avg_order_value
+  FROM orders o
+  LEFT JOIN finance_kpis_daily fk ON fk.kpi_date BETWEEN p_from AND p_to
+  WHERE o.created_at::date BETWEEN p_from AND p_to;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =============================================================================
+-- SECTION 3: STORED PROCEDURES
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Procedure 1: place_order
+-- Full order placement workflow: validates cart, applies coupon, creates order,
+-- seller_orders, order_items, decrements stock, clears cart, sends notification.
+-- All in a single explicit transaction with COMMIT / ROLLBACK.
+--
+-- Usage (from psql):
+--   CALL place_order(customer_id, address_id, coupon_code, OUT result_order_id, OUT result_total);
+-- The Node.js layer calls this via: SELECT * FROM place_order(...) — see note below.
+--
+-- NOTE: PostgreSQL procedures with OUT params are called differently depending
+-- on the driver. We expose a wrapper function for Node.js compatibility.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE place_order(
+  p_customer_id  BIGINT,
+  p_address_id   BIGINT,
+  p_coupon_code  TEXT,
+  OUT p_order_id    BIGINT,
+  OUT p_total       NUMERIC
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_cart_id      BIGINT;
+  v_coupon_id    BIGINT;
+  v_discount     NUMERIC := 0;
+  v_total        NUMERIC := 0;
+  v_seller_id    BIGINT;
+  v_subtotal     NUMERIC;
+  v_so_id        BIGINT;
+  v_item         RECORD;
+  v_disc_type    TEXT;
+  v_disc_val     NUMERIC;
+  v_user_id      BIGINT;
+BEGIN
+  -- Get user_id for notification
+  SELECT user_id INTO v_user_id FROM customers WHERE customer_id = p_customer_id;
+
+  -- Get cart_id
+  SELECT cart_id INTO v_cart_id FROM carts WHERE customer_id = p_customer_id;
+  IF v_cart_id IS NULL THEN
+    RAISE EXCEPTION 'Cart not found for customer %', p_customer_id;
+  END IF;
+
+  -- Check cart is not empty
+  IF NOT EXISTS (SELECT 1 FROM cart_items WHERE cart_id = v_cart_id) THEN
+    RAISE EXCEPTION 'Cart is empty';
+  END IF;
+
+  -- Calculate raw total and check stock
+  FOR v_item IN
+    SELECT ci.variant_id, ci.quantity,
+           COALESCE(pv.discount_price, pv.price) AS unit_price,
+           pv.stock
+    FROM cart_items ci
+    JOIN product_variants pv ON pv.variant_id = ci.variant_id
+    WHERE ci.cart_id = v_cart_id
+  LOOP
+    IF v_item.quantity > v_item.stock THEN
+      RAISE EXCEPTION 'Insufficient stock for variant %', v_item.variant_id;
+    END IF;
+    v_total := v_total + (v_item.unit_price * v_item.quantity);
+  END LOOP;
+
+  -- Apply coupon if provided
+  IF p_coupon_code IS NOT NULL AND p_coupon_code <> '' THEN
+    SELECT coupon_id, discount_type, discount_value
+    INTO v_coupon_id, v_disc_type, v_disc_val
+    FROM coupons
+    WHERE code = p_coupon_code
+      AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE);
+
+    IF v_coupon_id IS NULL THEN
+      RAISE EXCEPTION 'Invalid or expired coupon: %', p_coupon_code;
+    END IF;
+
+    IF v_disc_type = 'percentage' THEN
+      v_discount := v_total * v_disc_val / 100;
+    ELSE
+      v_discount := v_disc_val;
+    END IF;
+    v_total := GREATEST(0, v_total - v_discount);
+  END IF;
+
+  -- Insert master order
+  INSERT INTO orders (customer_id, address_id, total_amount, order_status, payment_status)
+  VALUES (p_customer_id, p_address_id, ROUND(v_total, 2), 'pending', 'pending')
+  RETURNING order_id INTO p_order_id;
+
+  -- Group cart items by seller and create seller_orders + order_items
+  FOR v_seller_id IN
+    SELECT DISTINCT s.seller_id
+    FROM cart_items ci
+    JOIN product_variants pv ON pv.variant_id = ci.variant_id
+    JOIN products p          ON p.product_id  = pv.product_id
+    JOIN stores s            ON s.store_id    = p.store_id
+    WHERE ci.cart_id = v_cart_id
+  LOOP
+    -- Compute this seller's subtotal
+    SELECT COALESCE(SUM(COALESCE(pv.discount_price, pv.price) * ci.quantity), 0)
+    INTO v_subtotal
+    FROM cart_items ci
+    JOIN product_variants pv ON pv.variant_id = ci.variant_id
+    JOIN products p          ON p.product_id  = pv.product_id
+    JOIN stores s            ON s.store_id    = p.store_id
+    WHERE ci.cart_id = v_cart_id AND s.seller_id = v_seller_id;
+
+    INSERT INTO seller_orders (order_id, seller_id, subtotal, status)
+    VALUES (p_order_id, v_seller_id, ROUND(v_subtotal, 2), 'pending')
+    RETURNING seller_order_id INTO v_so_id;
+
+    -- Insert order_items and decrement stock for this seller
+    FOR v_item IN
+      SELECT ci.variant_id, ci.quantity,
+             COALESCE(pv.discount_price, pv.price) AS unit_price
+      FROM cart_items ci
+      JOIN product_variants pv ON pv.variant_id = ci.variant_id
+      JOIN products p          ON p.product_id  = pv.product_id
+      JOIN stores s            ON s.store_id    = p.store_id
+      WHERE ci.cart_id = v_cart_id AND s.seller_id = v_seller_id
+    LOOP
+      INSERT INTO order_items (seller_order_id, variant_id, quantity, price)
+      VALUES (v_so_id, v_item.variant_id, v_item.quantity, ROUND(v_item.unit_price, 2));
+
+      UPDATE product_variants
+      SET stock = stock - v_item.quantity
+      WHERE variant_id = v_item.variant_id;
+    END LOOP;
+  END LOOP;
+
+  -- Record coupon usage if applied
+  IF v_coupon_id IS NOT NULL THEN
+    INSERT INTO order_coupons (order_id, coupon_id, applied_amount)
+    VALUES (p_order_id, v_coupon_id, ROUND(v_discount, 2));
+  END IF;
+
+  -- Clear cart
+  DELETE FROM cart_items WHERE cart_id = v_cart_id;
+
+  -- Send notification
+  INSERT INTO notifications (user_id, type, message)
+  VALUES (v_user_id, 'order',
+          'Your order #' || p_order_id || ' has been placed. Total: ' || ROUND(v_total, 2));
+
+  p_total := ROUND(v_total, 2);
+END;
+$$;
+
+-- Node.js-callable wrapper (returns a row so pg driver can read OUT params easily)
+CREATE OR REPLACE FUNCTION fn_place_order(
+  p_customer_id BIGINT,
+  p_address_id  BIGINT,
+  p_coupon_code TEXT
+)
+RETURNS TABLE(order_id BIGINT, total NUMERIC) AS $$
+DECLARE
+  v_order_id BIGINT;
+  v_total    NUMERIC;
+BEGIN
+  CALL place_order(p_customer_id, p_address_id, p_coupon_code, v_order_id, v_total);
+  RETURN QUERY SELECT v_order_id, v_total;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =============================================================================
+-- SECTION 4: COMPLEX QUERY VIEWS
+-- (Used by the admin analytics endpoints — satisfies the "3+ complex queries" requirement)
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Complex Query 1: Top sellers by delivered revenue
+-- Multi-table join with aggregation across sellers, orders, users
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_top_sellers AS
+SELECT
+  s.seller_id,
+  u.name                                          AS seller_name,
+  u.email                                         AS seller_email,
+  s.kyc_status,
+  s.rating                                        AS seller_rating,
+  COUNT(DISTINCT so.seller_order_id)::INT         AS total_orders,
+  COALESCE(SUM(so.subtotal), 0)                  AS total_revenue,
+  COUNT(DISTINCT p.product_id)::INT               AS total_products,
+  COALESCE(AVG(r.rating), 0)::NUMERIC(3,2)       AS avg_product_rating,
+  COUNT(DISTINCT r.review_id)::INT                AS total_reviews
+FROM sellers s
+JOIN users u                ON u.user_id     = s.user_id
+LEFT JOIN seller_orders so  ON so.seller_id  = s.seller_id AND so.status = 'delivered'
+LEFT JOIN stores st         ON st.seller_id  = s.seller_id
+LEFT JOIN products p        ON p.store_id    = st.store_id
+LEFT JOIN reviews r         ON r.product_id  = p.product_id
+GROUP BY s.seller_id, u.name, u.email, s.kyc_status, s.rating
+ORDER BY total_revenue DESC;
+
+
+-- -----------------------------------------------------------------------------
+-- Complex Query 2: Best-selling products with revenue and review data
+-- Joins products, variants, order_items, reviews, categories, stores
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_best_selling_products AS
+SELECT
+  p.product_id,
+  p.name                                          AS product_name,
+  p.brand,
+  p.status,
+  cat.name                                        AS category_name,
+  st.store_name,
+  u.name                                          AS seller_name,
+  MIN(pv.price)                                  AS min_price,
+  COALESCE(SUM(oi.quantity), 0)::INT             AS total_units_sold,
+  COALESCE(SUM(oi.quantity * oi.price), 0)       AS total_revenue,
+  COALESCE(AVG(r.rating), 0)::NUMERIC(3,2)       AS avg_rating,
+  COUNT(DISTINCT r.review_id)::INT                AS review_count,
+  COALESCE(SUM(pv.stock), 0)::INT                AS current_stock
+FROM products p
+JOIN stores st              ON st.store_id    = p.store_id
+JOIN sellers s              ON s.seller_id    = st.seller_id
+JOIN users u                ON u.user_id      = s.user_id
+LEFT JOIN categories cat    ON cat.category_id = p.category_id
+LEFT JOIN product_variants pv ON pv.product_id = p.product_id
+LEFT JOIN order_items oi    ON oi.variant_id  = pv.variant_id
+LEFT JOIN reviews r         ON r.product_id   = p.product_id
+GROUP BY p.product_id, p.name, p.brand, p.status,
+         cat.name, st.store_name, u.name
+ORDER BY total_units_sold DESC;
+
+
+-- -----------------------------------------------------------------------------
+-- Complex Query 3: Category performance report
+-- Aggregates orders, revenue, and product counts per category
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_category_performance AS
+SELECT
+  cat.category_id,
+  cat.name                                         AS category_name,
+  cat.slug,
+  parent.name                                      AS parent_category,
+  COUNT(DISTINCT p.product_id)::INT               AS total_products,
+  COUNT(DISTINCT oi.order_item_id)::INT           AS total_orders,
+  COALESCE(SUM(oi.quantity), 0)::INT              AS total_units_sold,
+  COALESCE(SUM(oi.quantity * oi.price), 0)        AS total_revenue,
+  COALESCE(AVG(r.rating), 0)::NUMERIC(3,2)        AS avg_rating,
+  COALESCE(cm.percentage, 0)                      AS commission_rate
+FROM categories cat
+LEFT JOIN categories parent     ON parent.category_id = cat.parent_id
+LEFT JOIN products p            ON p.category_id      = cat.category_id
+LEFT JOIN product_variants pv   ON pv.product_id      = p.product_id
+LEFT JOIN order_items oi        ON oi.variant_id      = pv.variant_id
+LEFT JOIN reviews r             ON r.product_id       = p.product_id
+LEFT JOIN commissions cm        ON cm.category_id     = cat.category_id
+GROUP BY cat.category_id, cat.name, cat.slug, parent.name, cm.percentage
+ORDER BY total_revenue DESC;
+
+
+-- -----------------------------------------------------------------------------
+-- Complex Query 4: Customer lifetime value report
+-- Joins users, customers, orders, payments — used for admin analytics
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_customer_ltv AS
+SELECT
+  c.customer_id,
+  u.name                                          AS customer_name,
+  u.email,
+  u.created_at                                    AS joined_at,
+  COUNT(DISTINCT o.order_id)::INT                 AS total_orders,
+  COALESCE(SUM(o.total_amount), 0)               AS lifetime_value,
+  COALESCE(AVG(o.total_amount), 0)               AS avg_order_value,
+  MAX(o.created_at)                               AS last_order_at,
+  COUNT(DISTINCT r.review_id)::INT                AS reviews_written
+FROM customers c
+JOIN users u                ON u.user_id      = c.user_id
+LEFT JOIN orders o          ON o.customer_id  = c.customer_id
+                           AND o.payment_status = 'paid'
+LEFT JOIN reviews r         ON r.customer_id  = c.customer_id
+GROUP BY c.customer_id, u.name, u.email, u.created_at
+ORDER BY lifetime_value DESC;

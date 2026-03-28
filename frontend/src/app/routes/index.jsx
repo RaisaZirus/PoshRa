@@ -52,6 +52,7 @@ import SellerShipmentsPage from "../../features/seller/pages/SellerShipmentsPage
 import SellerPayoutsPage from "../../features/seller/pages/SellerPayoutsPage.jsx";
 import SellerQnAPage from "../../features/seller/pages/SellerQnAPage.jsx";
 import SellerViolationsPage from "../../features/seller/pages/SellerViolationsPage.jsx";
+import SellerReturnsPage from "../../features/seller/pages/SellerReturnsPage.jsx";
 
 // Admin
 import AdminDashboardPage from "../../features/admin/pages/AdminDashboardPage.jsx";
@@ -59,6 +60,7 @@ import AdminUsersPage from "../../features/admin/pages/AdminUsersPage.jsx";
 import AdminReportsPage from "../../features/admin/pages/AdminReportsPage.jsx";
 import AdminCampaignsPage from "../../features/admin/pages/AdminCampaignsPage.jsx";
 import AdminCommissionsPage from "../../features/admin/pages/AdminCommissionsPage.jsx";
+import AdminPayoutsPage from "../../features/admin/pages/AdminPayoutsPage.jsx";
 import AdminAuditLogsPage from "../../features/admin/pages/AdminAuditLogsPage.jsx";
 import AdminDashboardBuilderPage from "../../features/admin/pages/AdminDashboardBuilderPage.jsx";
 
@@ -144,6 +146,7 @@ const router = createBrowserRouter([
       { path: "payouts", element: <SellerPayoutsPage /> },
       { path: "qna", element: <SellerQnAPage /> },
       { path: "violations", element: <SellerViolationsPage /> },
+      { path: "returns", element: <SellerReturnsPage /> },
     ],
   },
 
@@ -164,6 +167,7 @@ const router = createBrowserRouter([
       { path: "reports", element: <AdminReportsPage /> },
       { path: "campaigns", element: <AdminCampaignsPage /> },
       { path: "commissions", element: <AdminCommissionsPage /> },
+      { path: "payouts", element: <AdminPayoutsPage /> },
       { path: "audit-logs", element: <AdminAuditLogsPage /> },
       { path: "dashboard-builder", element: <AdminDashboardBuilderPage /> },
     ],
