@@ -60,6 +60,7 @@ import AdminUsersPage from "../../features/admin/pages/AdminUsersPage.jsx";
 import AdminReportsPage from "../../features/admin/pages/AdminReportsPage.jsx";
 import AdminCampaignsPage from "../../features/admin/pages/AdminCampaignsPage.jsx";
 import AdminCommissionsPage from "../../features/admin/pages/AdminCommissionsPage.jsx";
+import AdminPayoutsPage from "../../features/admin/pages/AdminPayoutsPage.jsx";
 import AdminAuditLogsPage from "../../features/admin/pages/AdminAuditLogsPage.jsx";
 import AdminDashboardBuilderPage from "../../features/admin/pages/AdminDashboardBuilderPage.jsx";
 
@@ -166,6 +167,7 @@ const router = createBrowserRouter([
       { path: "reports", element: <AdminReportsPage /> },
       { path: "campaigns", element: <AdminCampaignsPage /> },
       { path: "commissions", element: <AdminCommissionsPage /> },
+      { path: "payouts", element: <AdminPayoutsPage /> },
       { path: "audit-logs", element: <AdminAuditLogsPage /> },
       { path: "dashboard-builder", element: <AdminDashboardBuilderPage /> },
     ],

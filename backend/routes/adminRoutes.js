@@ -1,0 +1,677 @@
+import express from "express";
+import jwt from "jsonwebtoken";
+import { pool } from "../db.js";
+
+const router = express.Router();
+
+function authMiddleware(req, res, next) {
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer\s+(.*)$/i);
+  if (!m) return res.status(401).json({ success: false, message: "Unauthorized" });
+  try {
+    req.user = jwt.verify(m[1], process.env.JWT_ACCESS_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Admin account required" });
+  }
+  next();
+}
+
+router.use(authMiddleware, requireAdmin);
+
+async function getAdminId(userId) {
+  const { rows } = await pool.query(
+    "SELECT admin_id FROM admins WHERE user_id = $1",
+    [userId]
+  );
+  if (!rows.length) throw new Error("Admin account not found");
+  return rows[0].admin_id;
+}
+
+// Audit log helper — always runs inside the caller's transaction client
+async function logAudit(client, adminId, action, entityType = null, entityId = null) {
+  await client.query(
+    `INSERT INTO audit_logs (admin_id, action, entity_type, entity_id)
+     VALUES ($1, $2, $3, $4)`,
+    [adminId, action, entityType, entityId]
+  );
+}
+
+// ── GET /api/admin/dashboard ──────────────────────────────────────────────────
+// Uses fn_platform_analytics function + site/traffic/finance KPI tables
+router.get("/dashboard", async (req, res) => {
+  try {
+    const [
+      usersRes, sellersRes, ordersRes, gmvRes,
+      revenueRes, pendingKycRes, reportsRes,
+      kpiRes, trafficRes, financeRes,
+    ] = await Promise.all([
+      pool.query("SELECT COUNT(*)::int AS total FROM users"),
+      pool.query("SELECT COUNT(*)::int AS total FROM sellers"),
+      pool.query("SELECT COUNT(*)::int AS total FROM orders"),
+      pool.query("SELECT COALESCE(SUM(total_amount),0)::numeric AS gmv FROM orders"),
+      pool.query(
+        `SELECT COALESCE(SUM(commission_total),0)::numeric AS net_revenue
+         FROM finance_kpis_daily WHERE kpi_date >= NOW() - INTERVAL '30 days'`
+      ),
+      pool.query("SELECT COUNT(*)::int AS total FROM sellers WHERE kyc_status = 'pending'"),
+      pool.query("SELECT COUNT(*)::int AS total FROM reports WHERE status = 'pending'"),
+      pool.query(
+        `SELECT kpi_date, new_users, new_sellers, total_orders, gross_merch_value, net_revenue
+         FROM site_kpis_daily ORDER BY kpi_date DESC LIMIT 30`
+      ),
+      pool.query(
+        `SELECT kpi_date, searches, product_clicks, product_views
+         FROM traffic_kpis_daily ORDER BY kpi_date DESC LIMIT 30`
+      ),
+      pool.query(
+        `SELECT kpi_date, commission_total, payouts_requested, payouts_processed
+         FROM finance_kpis_daily ORDER BY kpi_date DESC LIMIT 30`
+      ),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        stats: {
+          total_users:     usersRes.rows[0].total,
+          total_sellers:   sellersRes.rows[0].total,
+          total_orders:    ordersRes.rows[0].total,
+          gmv:             gmvRes.rows[0].gmv,
+          net_revenue:     revenueRes.rows[0].net_revenue,
+          pending_kyc:     pendingKycRes.rows[0].total,
+          pending_reports: reportsRes.rows[0].total,
+        },
+        kpis:    kpiRes.rows.reverse(),
+        traffic: trafficRes.rows.reverse(),
+        finance: financeRes.rows.reverse(),
+      },
+    });
+  } catch (err) {
+    console.error("admin dashboard error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/analytics/top-sellers ─────────────────────────────────────
+// Complex Query 1 — uses vw_top_sellers view
+router.get("/analytics/top-sellers", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const { rows } = await pool.query(
+      `SELECT * FROM vw_top_sellers LIMIT $1`, [limit]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("top sellers error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/analytics/best-products ────────────────────────────────────
+// Complex Query 2 — uses vw_best_selling_products view
+router.get("/analytics/best-products", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const { rows } = await pool.query(
+      `SELECT * FROM vw_best_selling_products LIMIT $1`, [limit]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("best products error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/analytics/category-performance ─────────────────────────────
+// Complex Query 3 — uses vw_category_performance view
+router.get("/analytics/category-performance", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM vw_category_performance`);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("category performance error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/analytics/customer-ltv ─────────────────────────────────────
+// Complex Query 4 — uses vw_customer_ltv view
+router.get("/analytics/customer-ltv", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const { rows } = await pool.query(
+      `SELECT * FROM vw_customer_ltv LIMIT $1`, [limit]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("customer LTV error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/analytics/platform ─────────────────────────────────────────
+// Uses fn_platform_analytics function with a custom date range
+router.get("/analytics/platform", async (req, res) => {
+  try {
+    const from = req.query.from || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const to   = req.query.to   || new Date().toISOString().slice(0, 10);
+    const { rows } = await pool.query(
+      `SELECT * FROM fn_platform_analytics($1::date, $2::date)`, [from, to]
+    );
+    res.json({ success: true, data: rows[0], range: { from, to } });
+  } catch (err) {
+    console.error("platform analytics error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/analytics/seller-summary/:seller_id ───────────────────────
+// Uses fn_seller_revenue_summary function
+router.get("/analytics/seller-summary/:seller_id", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM fn_seller_revenue_summary($1)`, [req.params.seller_id]
+    );
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error("seller summary error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/users ──────────────────────────────────────────────────────
+router.get("/users", async (req, res) => {
+  try {
+    const { role, is_active, search, page = 1, limit = 20 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const conditions = [];
+    const params = [];
+
+    if (role)      { params.push(role);            conditions.push(`u.role = $${params.length}`); }
+    if (is_active !== undefined) {
+      params.push(is_active === "true");
+      conditions.push(`u.is_active = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM users u ${where}`, params
+    );
+
+    params.push(Number(limit), offset);
+    const { rows } = await pool.query(
+      `SELECT u.user_id, u.name, u.email, u.phone, u.role, u.is_active,
+              u.email_verified, u.created_at,
+              s.kyc_status, s.seller_id
+       FROM users u
+       LEFT JOIN sellers s ON s.user_id = u.user_id
+       ${where}
+       ORDER BY u.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin users error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/admin/users/:user_id/status ────────────────────────────────────
+// Explicit transaction: update user + audit log in one transaction
+router.patch("/users/:user_id/status", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { user_id } = req.params;
+    const { is_active } = req.body;
+
+    await client.query(
+      "UPDATE users SET is_active = $1, updated_at = NOW() WHERE user_id = $2",
+      [is_active, user_id]
+    );
+
+    await logAudit(client, adminId, `Set user ${user_id} active=${is_active}`, "user", user_id);
+    await client.query("COMMIT");
+
+    res.json({ success: true, message: "User status updated" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin user status error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── PATCH /api/admin/sellers/:seller_id/kyc ───────────────────────────────────
+// Explicit transaction: update kyc_status + audit log
+router.patch("/sellers/:seller_id/kyc", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { seller_id } = req.params;
+    const { kyc_status } = req.body;
+
+    if (!["pending", "verified", "rejected"].includes(kyc_status)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Invalid kyc_status" });
+    }
+
+    await client.query(
+      "UPDATE sellers SET kyc_status = $1 WHERE seller_id = $2",
+      [kyc_status, seller_id]
+    );
+    await logAudit(client, adminId, `Set seller ${seller_id} KYC to ${kyc_status}`, "seller", seller_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "KYC status updated" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin kyc error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── GET /api/admin/reports ────────────────────────────────────────────────────
+router.get("/reports", async (req, res) => {
+  try {
+    const { status, entity_type, page = 1, limit = 20 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const conditions = [];
+    const params = [];
+
+    if (status)      { params.push(status);      conditions.push(`r.status = $${params.length}`); }
+    if (entity_type) { params.push(entity_type); conditions.push(`r.entity_type = $${params.length}`); }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM reports r ${where}`, params
+    );
+
+    params.push(Number(limit), offset);
+    const { rows } = await pool.query(
+      `SELECT r.report_id, r.entity_type, r.entity_id, r.reason, r.status, r.created_at,
+              u.name AS reported_by_name, u.email AS reported_by_email
+       FROM reports r
+       JOIN users u ON u.user_id = r.reported_by_user
+       ${where}
+       ORDER BY r.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin reports error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/admin/reports/:report_id ───────────────────────────────────────
+// Explicit transaction: update report + audit log
+router.patch("/reports/:report_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { report_id } = req.params;
+    const { status } = req.body;
+
+    if (!["pending", "resolved", "rejected"].includes(status)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    await client.query(
+      "UPDATE reports SET status = $1 WHERE report_id = $2", [status, report_id]
+    );
+    await logAudit(client, adminId, `Updated report ${report_id} to ${status}`, "report", report_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Report updated" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin report update error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── GET /api/admin/campaigns ──────────────────────────────────────────────────
+router.get("/campaigns", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.campaign_id, c.name, c.start_time, c.end_time,
+              COUNT(cp.variant_id)::int AS product_count
+       FROM campaigns c
+       LEFT JOIN campaign_products cp ON cp.campaign_id = c.campaign_id
+       GROUP BY c.campaign_id
+       ORDER BY c.start_time DESC`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("admin campaigns error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/campaigns ─────────────────────────────────────────────────
+// Explicit transaction: insert campaign + audit log
+router.post("/campaigns", async (req, res) => {
+  const { name, start_time, end_time } = req.body;
+  if (!name || !start_time || !end_time) {
+    return res.status(400).json({ success: false, message: "name, start_time, end_time required" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+
+    const { rows } = await client.query(
+      `INSERT INTO campaigns (name, start_time, end_time) VALUES ($1, $2, $3) RETURNING *`,
+      [name, start_time, end_time]
+    );
+    await logAudit(client, adminId, `Created campaign '${name}'`, "campaign", rows[0].campaign_id);
+
+    await client.query("COMMIT");
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin campaign create error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── PATCH /api/admin/campaigns/:campaign_id ───────────────────────────────────
+// Explicit transaction: update campaign + audit log
+router.patch("/campaigns/:campaign_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { campaign_id } = req.params;
+    const { name, start_time, end_time } = req.body;
+
+    await client.query(
+      `UPDATE campaigns
+       SET name       = COALESCE($1, name),
+           start_time = COALESCE($2, start_time),
+           end_time   = COALESCE($3, end_time)
+       WHERE campaign_id = $4`,
+      [name, start_time, end_time, campaign_id]
+    );
+    await logAudit(client, adminId, `Updated campaign ${campaign_id}`, "campaign", campaign_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Campaign updated" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin campaign update error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── DELETE /api/admin/campaigns/:campaign_id ──────────────────────────────────
+// Explicit transaction: delete campaign + audit log
+router.delete("/campaigns/:campaign_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { campaign_id } = req.params;
+
+    await client.query("DELETE FROM campaigns WHERE campaign_id = $1", [campaign_id]);
+    await logAudit(client, adminId, `Deleted campaign ${campaign_id}`, "campaign", campaign_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Campaign deleted" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin campaign delete error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── GET /api/admin/commissions ────────────────────────────────────────────────
+router.get("/commissions", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT cm.commission_id, cm.percentage,
+              cat.category_id, cat.name AS category_name, cat.slug
+       FROM commissions cm
+       LEFT JOIN categories cat ON cat.category_id = cm.category_id
+       ORDER BY cat.name NULLS LAST`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("admin commissions error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/commissions ───────────────────────────────────────────────
+router.post("/commissions", async (req, res) => {
+  const { category_id, percentage } = req.body;
+  if (percentage === undefined) {
+    return res.status(400).json({ success: false, message: "percentage required" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+
+    const { rows } = await client.query(
+      `INSERT INTO commissions (category_id, percentage) VALUES ($1, $2) RETURNING *`,
+      [category_id || null, percentage]
+    );
+    await logAudit(client, adminId, `Created commission for category ${category_id ?? "global"}`, "commission", rows[0].commission_id);
+
+    await client.query("COMMIT");
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin commission create error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── PATCH /api/admin/commissions/:commission_id ───────────────────────────────
+router.patch("/commissions/:commission_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { commission_id } = req.params;
+    const { percentage } = req.body;
+
+    await client.query(
+      "UPDATE commissions SET percentage = $1 WHERE commission_id = $2",
+      [percentage, commission_id]
+    );
+    await logAudit(client, adminId, `Updated commission ${commission_id} to ${percentage}%`, "commission", commission_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Commission updated" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin commission update error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── DELETE /api/admin/commissions/:commission_id ──────────────────────────────
+router.delete("/commissions/:commission_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { commission_id } = req.params;
+
+    await client.query("DELETE FROM commissions WHERE commission_id = $1", [commission_id]);
+    await logAudit(client, adminId, `Deleted commission ${commission_id}`, "commission", commission_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Commission deleted" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin commission delete error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── GET /api/admin/audit-logs ─────────────────────────────────────────────────
+router.get("/audit-logs", async (req, res) => {
+  try {
+    const { page = 1, limit = 30 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    const countRes = await pool.query("SELECT COUNT(*)::int AS total FROM audit_logs");
+    const { rows } = await pool.query(
+      `SELECT al.audit_id, al.action, al.entity_type, al.entity_id, al.created_at,
+              u.name AS admin_name, u.email AS admin_email
+       FROM audit_logs al
+       JOIN admins a ON a.admin_id = al.admin_id
+       JOIN users u  ON u.user_id  = a.user_id
+       ORDER BY al.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [Number(limit), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin audit-logs error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/categories ─────────────────────────────────────────────────
+router.get("/categories", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.category_id, c.name, c.slug, c.parent_id, p.name AS parent_name
+       FROM categories c
+       LEFT JOIN categories p ON p.category_id = c.parent_id
+       ORDER BY c.name`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("admin categories error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/payouts ────────────────────────────────────────────────────
+router.get("/payouts", async (req, res) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const params = [];
+    let where = "";
+
+    if (status) { params.push(status); where = `WHERE p.status = $${params.length}`; }
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM payouts p ${where}`, params
+    );
+
+    params.push(Number(limit), offset);
+    const { rows } = await pool.query(
+      `SELECT p.payout_id, p.amount, p.status, p.requested_at,
+              s.seller_id, u.name AS seller_name, u.email AS seller_email
+       FROM payouts p
+       JOIN sellers s ON s.seller_id = p.seller_id
+       JOIN users u   ON u.user_id   = s.user_id
+       ${where}
+       ORDER BY p.requested_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin payouts error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/admin/payouts/:payout_id ──────────────────────────────────────
+// Explicit transaction: update payout status + audit log
+router.patch("/payouts/:payout_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { payout_id } = req.params;
+    const { status } = req.body;
+
+    if (!["requested", "processed", "failed"].includes(status)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    await client.query(
+      "UPDATE payouts SET status = $1 WHERE payout_id = $2", [status, payout_id]
+    );
+    await logAudit(client, adminId, `Updated payout ${payout_id} to ${status}`, "payout", payout_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Payout updated" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin payout update error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+export default router;

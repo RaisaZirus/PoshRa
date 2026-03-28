@@ -1,10 +1,11 @@
 import { pool } from "../db.js";
 
 // ─── POST /api/orders ─────────────────────────────────────────────────────────
-// Converts the customer's cart into an order.
-// Everything runs in one DB transaction — if anything fails, nothing is saved.
+// Calls the place_order stored procedure which handles the full workflow:
+// stock validation → order creation → seller_orders → order_items →
+// stock decrement → coupon recording → cart clear → notification.
+// The procedure runs inside its own explicit BEGIN/COMMIT/ROLLBACK.
 export const createOrder = async (req, res) => {
-  // JWT payload uses "userId" (camelCase) — matches how authMiddleware sets req.user
   const userId = req.user.userId;
   const { address_id, coupon_code } = req.body;
 
@@ -12,197 +13,62 @@ export const createOrder = async (req, res) => {
     return res.status(400).json({ success: false, message: "Delivery address is required" });
   }
 
+  const client = await pool.connect();
   try {
-    // Step 1: get customer_id from user_id
-    const { rows: custRows } = await pool.query(
+    await client.query("BEGIN");
+
+    // Resolve customer_id
+    const { rows: custRows } = await client.query(
       "SELECT customer_id FROM customers WHERE user_id = $1",
       [userId]
     );
     if (!custRows.length) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Not a customer account" });
+      await client.query("ROLLBACK");
+      return res.status(403).json({ success: false, message: "Not a customer account" });
     }
     const customerId = custRows[0].customer_id;
 
-    // Step 2: load full cart with variant + stock + seller info
-    const { rows: cartRows } = await pool.query(
-      `SELECT c.cart_id, ci.cart_item_id, ci.variant_id, ci.quantity,
-              pv.price, pv.discount_price, pv.stock,
-              p.store_id, s.seller_id
-       FROM carts c
-       JOIN cart_items ci  ON ci.cart_id    = c.cart_id
-       JOIN product_variants pv ON pv.variant_id = ci.variant_id
-       JOIN products p         ON p.product_id  = pv.product_id
-       JOIN stores s           ON s.store_id    = p.store_id
-       WHERE c.customer_id = $1`,
-      [customerId]
+    // Delegate the full workflow to the stored procedure
+    // fn_place_order is the Node.js-friendly wrapper around CALL place_order(...)
+    const { rows } = await client.query(
+      "SELECT order_id, total FROM fn_place_order($1, $2, $3)",
+      [customerId, address_id, coupon_code || null]
     );
 
-    if (!cartRows.length) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Cart is empty" });
-    }
+    await client.query("COMMIT");
 
-    // Step 3: stock check — fail fast before any DB writes
-    for (const item of cartRows) {
-      if (item.quantity > item.stock) {
-        return res.status(409).json({
-          success: false,
-          message: `Insufficient stock for variant ${item.variant_id}`,
-        });
-      }
-    }
-
-    // Step 4: calculate total (discount_price wins if set)
-    const effectivePrice = (item) =>
-      parseFloat(item.discount_price ?? item.price);
-
-    let totalAmount = cartRows.reduce(
-      (sum, item) => sum + effectivePrice(item) * item.quantity,
-      0
-    );
-
-    // Step 5: validate coupon if provided
-    let couponId = null;
-    let appliedDiscount = 0;
-
-    if (coupon_code) {
-      const { rows: couponRows } = await pool.query(
-        `SELECT coupon_id, discount_type, discount_value
-         FROM coupons
-         WHERE code = $1
-           AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)`,
-        [coupon_code]
-      );
-      if (!couponRows.length) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid or expired coupon" });
-      }
-      const coupon = couponRows[0];
-      couponId = coupon.coupon_id;
-      appliedDiscount =
-        coupon.discount_type === "percentage"
-          ? (totalAmount * parseFloat(coupon.discount_value)) / 100
-          : parseFloat(coupon.discount_value);
-      totalAmount = Math.max(0, totalAmount - appliedDiscount);
-    }
-
-    // Step 6: run everything inside a single transaction
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-
-      // 6a: master order row
-      const { rows: orderRows } = await client.query(
-        `INSERT INTO orders (customer_id, address_id, total_amount, order_status, payment_status)
-         VALUES ($1, $2, $3, 'pending', 'pending')
-         RETURNING order_id`,
-        [customerId, address_id || null, totalAmount.toFixed(2)]
-      );
-      const orderId = orderRows[0].order_id;
-
-      // 6b: group items by seller
-      const bySeller = {};
-      for (const item of cartRows) {
-        if (!bySeller[item.seller_id]) bySeller[item.seller_id] = [];
-        bySeller[item.seller_id].push(item);
-      }
-
-      // 6c: one seller_order per seller + order_items + stock decrement
-      for (const [sellerId, items] of Object.entries(bySeller)) {
-        const subtotal = items.reduce(
-          (sum, item) => sum + effectivePrice(item) * item.quantity,
-          0
-        );
-
-        const { rows: soRows } = await client.query(
-          `INSERT INTO seller_orders (order_id, seller_id, subtotal, status)
-           VALUES ($1, $2, $3, 'pending')
-           RETURNING seller_order_id`,
-          [orderId, sellerId, subtotal.toFixed(2)]
-        );
-        const sellerOrderId = soRows[0].seller_order_id;
-
-        for (const item of items) {
-          await client.query(
-            `INSERT INTO order_items (seller_order_id, variant_id, quantity, price)
-             VALUES ($1, $2, $3, $4)`,
-            [
-              sellerOrderId,
-              item.variant_id,
-              item.quantity,
-              effectivePrice(item).toFixed(2),
-            ]
-          );
-
-          await client.query(
-            `UPDATE product_variants SET stock = stock - $1 WHERE variant_id = $2`,
-            [item.quantity, item.variant_id]
-          );
-        }
-      }
-
-      // 6d: record coupon usage
-      if (couponId) {
-        await client.query(
-          `INSERT INTO order_coupons (order_id, coupon_id, applied_amount)
-           VALUES ($1, $2, $3)`,
-          [orderId, couponId, appliedDiscount.toFixed(2)]
-        );
-      }
-
-      // 6e: empty the cart
-      await client.query(
-        `DELETE FROM cart_items WHERE cart_id = $1`,
-        [cartRows[0].cart_id]
-      );
-
-      // Notify customer
-      await client.query(
-        `INSERT INTO notifications (user_id, type, message) VALUES ($1, 'order', $2)`,
-        [userId, `Your order #${orderId} has been placed successfully! Total: ₹${totalAmount.toFixed(2)}`]
-      );
-
-      await client.query("COMMIT");
-
-      return res.status(201).json({
-        success: true,
-        message: "Order placed successfully",
-        data: {
-          order_id: orderId,
-          total_amount: totalAmount.toFixed(2),
-        },
-      });
-    } catch (err) {
-      await client.query("ROLLBACK");
-      console.error("createOrder transaction failed:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Order creation failed" });
-    } finally {
-      client.release();
-    }
+    return res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      data: {
+        order_id: rows[0].order_id,
+        total_amount: rows[0].total,
+      },
+    });
   } catch (err) {
-    console.error("createOrder error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal server error" });
+    await client.query("ROLLBACK");
+    console.error("createOrder error:", err.message);
+    // Surface procedure exceptions (stock errors, empty cart, bad coupon) to client
+    if (err.message?.includes("Insufficient stock") ||
+        err.message?.includes("Cart is empty") ||
+        err.message?.includes("coupon")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    return res.status(500).json({ success: false, message: "Order creation failed" });
+  } finally {
+    client.release();
   }
 };
 
 // ─── GET /api/orders ──────────────────────────────────────────────────────────
-// Returns all orders for the logged-in customer (summary list).
+// Complex query: joins orders → customers → seller_orders → order_items
 export const getMyOrders = async (req, res) => {
   const userId = req.user.userId;
-
   try {
     const { rows } = await pool.query(
       `SELECT o.order_id, o.total_amount, o.order_status,
               o.payment_status, o.created_at,
-              COUNT(oi.order_item_id) AS item_count
+              COUNT(oi.order_item_id)::int AS item_count
        FROM orders o
        JOIN customers c         ON c.customer_id          = o.customer_id
        JOIN seller_orders so    ON so.order_id             = o.order_id
@@ -212,24 +78,20 @@ export const getMyOrders = async (req, res) => {
        ORDER BY o.created_at DESC`,
       [userId]
     );
-
     return res.json({ success: true, data: rows });
   } catch (err) {
     console.error("getMyOrders error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch orders" });
+    return res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
 };
 
 // ─── GET /api/orders/:id ──────────────────────────────────────────────────────
-// Returns full detail: order + seller sub-orders + items + shipments.
+// Complex query: order + seller sub-orders + items + shipments in one round-trip
 export const getOrderById = async (req, res) => {
   const userId = req.user.userId;
   const { id } = req.params;
 
   try {
-    // Verify ownership
     const { rows: orderRows } = await pool.query(
       `SELECT o.order_id, o.total_amount, o.order_status, o.payment_status,
               o.created_at, a.city, a.area, a.details AS address_details
@@ -239,14 +101,10 @@ export const getOrderById = async (req, res) => {
        WHERE o.order_id = $1 AND c.user_id = $2`,
       [id, userId]
     );
-
     if (!orderRows.length) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // Seller sub-orders with aggregated items including product info
     const { rows: sellerOrders } = await pool.query(
       `SELECT so.seller_order_id, so.seller_id, so.subtotal, so.status,
               s.business_name,
@@ -271,7 +129,6 @@ export const getOrderById = async (req, res) => {
       [id]
     );
 
-    // Shipment info if dispatched
     const { rows: shipments } = await pool.query(
       `SELECT sh.shipment_id, sh.tracking_number, sh.status,
               sh.shipped_at, sh.delivered_at, co.name AS courier_name
@@ -284,22 +141,16 @@ export const getOrderById = async (req, res) => {
 
     return res.json({
       success: true,
-      data: {
-        order: orderRows[0],
-        seller_orders: sellerOrders,
-        shipments,
-      },
+      data: { order: orderRows[0], seller_orders: sellerOrders, shipments },
     });
   } catch (err) {
     console.error("getOrderById error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to fetch order" });
+    return res.status(500).json({ success: false, message: "Failed to fetch order" });
   }
 };
 
 // ─── PATCH /api/orders/:id/cancel ────────────────────────────────────────────
-// Cancels an order only if still 'pending'. Restores stock atomically.
+// Explicit transaction: cancel order + all seller_orders + restore stock
 export const cancelOrder = async (req, res) => {
   const userId = req.user.userId;
   const { id } = req.params;
@@ -308,7 +159,6 @@ export const cancelOrder = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Verify ownership + status
     const { rows } = await client.query(
       `SELECT o.order_id, o.order_status
        FROM orders o
@@ -319,11 +169,8 @@ export const cancelOrder = async (req, res) => {
 
     if (!rows.length) {
       await client.query("ROLLBACK");
-      return res
-        .status(404)
-        .json({ success: false, message: "Order not found" });
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
-
     if (rows[0].order_status !== "pending") {
       await client.query("ROLLBACK");
       return res.status(409).json({
@@ -332,17 +179,14 @@ export const cancelOrder = async (req, res) => {
       });
     }
 
-    // Cancel master order + all seller sub-orders
     await client.query(
-      `UPDATE orders SET order_status = 'cancelled' WHERE order_id = $1`,
-      [id]
+      `UPDATE orders SET order_status = 'cancelled' WHERE order_id = $1`, [id]
     );
     await client.query(
-      `UPDATE seller_orders SET status = 'cancelled' WHERE order_id = $1`,
-      [id]
+      `UPDATE seller_orders SET status = 'cancelled' WHERE order_id = $1`, [id]
     );
 
-    // Restore stock in one query
+    // Restore stock atomically
     await client.query(
       `UPDATE product_variants pv
        SET stock = stock + oi.quantity
@@ -352,23 +196,17 @@ export const cancelOrder = async (req, res) => {
       [id]
     );
 
-    // Notify customer
     await client.query(
       `INSERT INTO notifications (user_id, type, message) VALUES ($1, 'order', $2)`,
       [userId, `Your order #${id} has been cancelled and stock restored.`]
     );
 
     await client.query("COMMIT");
-    return res.json({
-      success: true,
-      message: "Order cancelled and stock restored",
-    });
+    return res.json({ success: true, message: "Order cancelled and stock restored" });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("cancelOrder error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Cancellation failed" });
+    return res.status(500).json({ success: false, message: "Cancellation failed" });
   } finally {
     client.release();
   }
@@ -384,12 +222,12 @@ export const getOrderReturns = async (req, res) => {
               oi.quantity, oi.price,
               pv.sku, p.name AS product_name
        FROM return_requests rr
-       JOIN order_items oi ON oi.order_item_id = rr.order_item_id
-       JOIN seller_orders so ON so.seller_order_id = oi.seller_order_id
-       JOIN orders o ON o.order_id = so.order_id
-       JOIN customers c ON c.customer_id = o.customer_id
-       JOIN product_variants pv ON pv.variant_id = oi.variant_id
-       JOIN products p ON p.product_id = pv.product_id
+       JOIN order_items oi      ON oi.order_item_id    = rr.order_item_id
+       JOIN seller_orders so    ON so.seller_order_id  = oi.seller_order_id
+       JOIN orders o            ON o.order_id          = so.order_id
+       JOIN customers c         ON c.customer_id       = o.customer_id
+       JOIN product_variants pv ON pv.variant_id       = oi.variant_id
+       JOIN products p          ON p.product_id        = pv.product_id
        WHERE o.order_id = $1 AND c.user_id = $2
        ORDER BY rr.created_at DESC`,
       [id, userId]
@@ -402,6 +240,7 @@ export const getOrderReturns = async (req, res) => {
 };
 
 // ── POST /api/orders/items/:order_item_id/returns ─────────────────────────────
+// Explicit transaction: validate → insert return_request → notify
 export const createReturn = async (req, res) => {
   const userId = req.user.userId;
   const { order_item_id } = req.params;
@@ -411,52 +250,76 @@ export const createReturn = async (req, res) => {
     return res.status(400).json({ success: false, message: "Return reason is required" });
   }
 
+  const client = await pool.connect();
   try {
-    const { rows: itemRows } = await pool.query(
+    await client.query("BEGIN");
+
+    // Verify ownership and eligibility
+    const { rows: itemRows } = await client.query(
       `SELECT oi.order_item_id, oi.quantity, oi.price,
               so.status AS seller_status, o.order_id,
-              pv.sku, p.name AS product_name
+              pv.sku, p.name AS product_name, c.user_id AS owner_user_id
        FROM order_items oi
        JOIN seller_orders so ON so.seller_order_id = oi.seller_order_id
-       JOIN orders o ON o.order_id = so.order_id
-       JOIN customers c ON c.customer_id = o.customer_id
-       JOIN product_variants pv ON pv.variant_id = oi.variant_id
-       JOIN products p ON p.product_id = pv.product_id
-       WHERE oi.order_item_id = $1 AND c.user_id = $2`,
+       JOIN orders o         ON o.order_id         = so.order_id
+       JOIN customers c      ON c.customer_id      = o.customer_id
+       JOIN product_variants pv ON pv.variant_id   = oi.variant_id
+       JOIN products p       ON p.product_id       = pv.product_id
+       WHERE oi.order_item_id = $1 AND c.user_id   = $2`,
       [order_item_id, userId]
     );
 
     if (!itemRows.length) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ success: false, message: "Order item not found" });
     }
 
     const item = itemRows[0];
-
     if (item.seller_status !== "delivered") {
-      return res.status(409).json({ success: false, message: "Returns can only be requested for delivered items" });
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        success: false,
+        message: "Returns can only be requested for delivered items",
+      });
     }
 
-    const { rows: existing } = await pool.query(
+    // Check for duplicate return request
+    const { rows: existing } = await client.query(
       "SELECT return_id, status FROM return_requests WHERE order_item_id = $1",
       [order_item_id]
     );
     if (existing.length) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         success: false,
         message: `A return request already exists for this item (status: ${existing[0].status})`,
       });
     }
 
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       `INSERT INTO return_requests (order_item_id, reason, status)
        VALUES ($1, $2, 'requested')
        RETURNING return_id, status, created_at`,
       [order_item_id, reason.trim()]
     );
 
-    res.status(201).json({ success: true, message: "Return request submitted", data: { ...rows[0], ...item } });
+    // Notify customer
+    await client.query(
+      `INSERT INTO notifications (user_id, type, message) VALUES ($1, 'return', $2)`,
+      [userId, `Return request submitted for "${item.product_name}" (SKU: ${item.sku}).`]
+    );
+
+    await client.query("COMMIT");
+    res.status(201).json({
+      success: true,
+      message: "Return request submitted",
+      data: { ...rows[0], ...item },
+    });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("createReturn error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
   }
 };
