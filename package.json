@@ -4,7 +4,9 @@
   "description": "",
   "main": "backend/server.js",
   "scripts": {
-    "dev": "nodemon backend/server.js"
+    "dev": "nodemon backend/server.js",
+    "db:apply-extensions": "node backend/apply_db_extensions.js",
+    "db:seed": "node seed-db.js"
   },
   "keywords": [],
   "author": "",

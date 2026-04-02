@@ -5,14 +5,7 @@ import { pool } from "../db.js";
 export const getAllProducts = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT p.product_id AS id, p.*, MIN(v.price) AS price, MAX(pi.image_url) AS image, SUM(v.stock) AS total_stock
-      FROM products p
-      LEFT JOIN product_variants v ON v.product_id = p.product_id
-      LEFT JOIN product_images pi ON pi.product_id = p.product_id
-      GROUP BY p.product_id
-      ORDER BY p.created_at DESC
-      LIMIT 200
-      SELECT 
+      SELECT
         p.product_id,
         p.store_id,
         p.category_id,
@@ -21,32 +14,23 @@ export const getAllProducts = async (req, res) => {
         p.brand,
         p.status,
         p.created_at,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'variant_id', pv.variant_id,
-          'sku', pv.sku,
-          'price', pv.price,
-          'discount_price', pv.discount_price,
-          'stock', pv.stock
-        )) FILTER (WHERE pv.variant_id IS NOT NULL), '[]'::json) as variants,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'image_id', pi.image_id,
-          'image_url', pi.image_url,
-          'is_primary', pi.is_primary
-        )) FILTER (WHERE pi.image_id IS NOT NULL), '[]'::json) as images,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'attribute_id', pa.attribute_id,
-          'name', pa.name,
-          'value', pa.value
-        )) FILTER (WHERE pa.attribute_id IS NOT NULL), '[]'::json) as attributes
+        MIN(v.price)       AS price,
+        MAX(pi.image_url)  AS image,
+        SUM(v.stock)       AS total_stock,
+        COALESCE((
+          SELECT SUM(oi.quantity)
+          FROM order_items oi
+          JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
+          WHERE pv2.product_id = p.product_id
+        ), 0)::int AS total_sold
       FROM products p
-      LEFT JOIN product_variants pv ON p.product_id = pv.product_id
-      LEFT JOIN product_images pi ON p.product_id = pi.product_id
-      LEFT JOIN product_attributes pa ON p.product_id = pa.product_id
+      LEFT JOIN product_variants v  ON v.product_id  = p.product_id
+      LEFT JOIN product_images pi   ON pi.product_id = p.product_id
       WHERE p.status = 'active'
       GROUP BY p.product_id
       ORDER BY p.created_at DESC
+      LIMIT 200
     `);
-
     res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
     console.error("Error in getAllProducts:", error);
@@ -151,6 +135,16 @@ export const getProduct = async (req, res) => {
         p.brand,
         p.status,
         p.created_at,
+        s.store_name,
+        s.store_slug,
+        COALESCE(AVG(r.rating), 0)::numeric(3,1)            AS avg_rating,
+        COUNT(DISTINCT r.review_id)::int                     AS reviews_count,
+        COALESCE((
+          SELECT SUM(oi.quantity)
+          FROM order_items oi
+          JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
+          WHERE pv2.product_id = p.product_id
+        ), 0)::int AS total_sold,
         COALESCE(json_agg(DISTINCT jsonb_build_object(
           'variant_id',     pv.variant_id,
           'sku',            pv.sku,
@@ -179,15 +173,20 @@ export const getProduct = async (req, res) => {
       [id]
     );
 
-    const product = prodRes.rows[0];
-    const variantsRes = await pool.query(`SELECT * FROM product_variants WHERE product_id = $1`, [id]);
-    const imagesRes = await pool.query(`SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, image_id ASC`, [id]);
+    const product = result.rows[0];
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
 
-    // build frontend-friendly shape
-    const price = variantsRes.rows.length ? Math.min(...variantsRes.rows.map(v => Number(v.price))) : null;
-    const image = imagesRes.rows.length ? imagesRes.rows[0].image_url : null;
+    const price = product.variants?.length
+      ? Math.min(...product.variants.map((v) => Number(v.price)))
+      : null;
+    const image = product.images?.length ? product.images[0].image_url : null;
 
-    res.status(200).json({ success: true, data: { id: product.product_id, ...product, price, image, variants: variantsRes.rows, images: imagesRes.rows } });
+    res.status(200).json({
+      success: true,
+      data: { id: product.product_id, ...product, price, image },
+    });
   } catch (error) {
     console.error("Error in getProduct:", error.message);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -313,8 +312,33 @@ export const deleteProduct = async (req, res) => {
       [id]
     );
 
-    // only active products by default
-    where.push(`p.status = 'active'`);
+    if (!result.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    await client.query("COMMIT");
+    return res.json({ success: true, message: "Product deleted", data: result.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("deleteProduct error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};
+
+// ─── GET /api/products/search ─────────────────────────────────────────────────
+// Complex query: multi-table join with dynamic filters + aggregation
+export const searchProducts = async (req, res) => {
+  try {
+    const {
+      q, category_id, store_id, min_price, max_price,
+      in_stock, sort, page = 1, limit = 20,
+    } = req.query;
+
+    const params = [];
+    const where = ["p.status = 'active'"];
 
     if (q) {
       params.push(`%${q}%`);
@@ -322,28 +346,23 @@ export const deleteProduct = async (req, res) => {
         `(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length} OR p.brand ILIKE $${params.length})`
       );
     }
-
-    if (categoryId && Number.isInteger(categoryId)) {
-      params.push(categoryId);
+    if (category_id && Number.isInteger(Number(category_id))) {
+      params.push(Number(category_id));
       where.push(`p.category_id = $${params.length}`);
     }
-
-    if (storeId && Number.isInteger(storeId)) {
-      params.push(storeId);
+    if (store_id && Number.isInteger(Number(store_id))) {
+      params.push(Number(store_id));
       where.push(`p.store_id = $${params.length}`);
     }
-
-    if (minPrice !== null) {
-      params.push(minPrice);
+    if (min_price !== undefined) {
+      params.push(parseFloat(min_price));
       where.push(`v.price >= $${params.length}`);
     }
-
-    if (maxPrice !== null) {
-      params.push(maxPrice);
+    if (max_price !== undefined) {
+      params.push(parseFloat(max_price));
       where.push(`v.price <= $${params.length}`);
     }
-
-    if (inStock === true) {
+    if (in_stock === "true") {
       where.push(`EXISTS (SELECT 1 FROM product_variants vv WHERE vv.product_id = p.product_id AND vv.stock > 0)`);
     }
 
@@ -351,9 +370,9 @@ export const deleteProduct = async (req, res) => {
     const offset = (Number(page) - 1) * Number(limit);
 
     let orderSQL = "ORDER BY p.created_at DESC";
-if (sort === "price_asc") orderSQL = "ORDER BY price ASC NULLS LAST";
-else if (sort === "price_desc") orderSQL = "ORDER BY price DESC NULLS LAST";
-else if (sort === "newest") orderSQL = "ORDER BY p.created_at DESC";
+    if (sort === "price_asc")  orderSQL = "ORDER BY price ASC NULLS LAST";
+    if (sort === "price_desc") orderSQL = "ORDER BY price DESC NULLS LAST";
+    if (sort === "newest")     orderSQL = "ORDER BY p.created_at DESC";
 
     const dataQuery = `
       SELECT p.product_id AS id, p.*,
@@ -385,27 +404,24 @@ else if (sort === "newest") orderSQL = "ORDER BY p.created_at DESC";
       pool.query(countQuery, params),
     ]);
 
-    // Log the search with filters (optional)
+    // Log the search (best-effort — failure does not affect response)
     try {
-      const filtersForLog = {};
-      if (minPrice !== null) filtersForLog.minPrice = minPrice;
-      if (maxPrice !== null) filtersForLog.maxPrice = maxPrice;
-      if (categoryId) filtersForLog.categoryId = categoryId;
-      if (storeId) filtersForLog.storeId = storeId;
-      if (inStock !== null) filtersForLog.inStock = inStock;
-      if (Object.keys(filtersForLog).length > 0) {
-        await pool.query(`INSERT INTO search_logs (query, filters, created_at) VALUES ($1, $2, NOW())`, [q || null, filtersForLog]);
-      } else {
-        await pool.query(`INSERT INTO search_logs (query, created_at) VALUES ($1, NOW())`, [q || null]);
-      }
-    } catch (e) {
-      // ignore logging failures
-    }
+      const filters = {};
+      if (min_price) filters.minPrice = min_price;
+      if (max_price) filters.maxPrice = max_price;
+      if (category_id) filters.categoryId = category_id;
+      if (store_id) filters.storeId = store_id;
+      await pool.query(
+        `INSERT INTO search_logs (query, filters, created_at) VALUES ($1, $2, NOW())`,
+        [q || null, Object.keys(filters).length ? filters : null]
+      );
+    } catch (_) { /* ignore */ }
 
-    const total = countResult.rows[0]?.total || 0;
-    const meta = { total, page, limit };
-
-    res.status(200).json({ success: true, data: dataResult.rows, meta });
+    res.status(200).json({
+      success: true,
+      data: dataResult.rows,
+      meta: { total: countResult.rows[0]?.total || 0, page: Number(page), limit: Number(limit) },
+    });
   } catch (error) {
     console.error("Error in searchProducts:", error);
     res.status(500).json({ success: false, message: "Internal server error" });

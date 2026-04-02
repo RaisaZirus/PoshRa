@@ -31,9 +31,9 @@ export const createOrder = async (req, res) => {
     // Delegate the full workflow to the stored procedure
     // fn_place_order is the Node.js-friendly wrapper around CALL place_order(...)
     const { rows } = await client.query(
-      "SELECT order_id, total FROM fn_place_order($1, $2, $3)",
-      [customerId, address_id, coupon_code || null]
-    );
+    "SELECT order_id, total FROM fn_place_order($1::bigint, $2::bigint, $3::text)",
+    [customerId, address_id, coupon_code || null]
+    );//changeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 
     await client.query("COMMIT");
 
