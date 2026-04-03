@@ -392,18 +392,26 @@ router.get("/payouts", async (req, res) => {
       [sellerId]
     );
 
-    const { rows: reservedRows } = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0)::numeric AS reserved
+    const { rows: processedRows } = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0)::numeric AS processed
        FROM payouts
-       WHERE seller_id = $1 AND status IN ('requested', 'processed')`,
+       WHERE seller_id = $1 AND status = 'processed'`,
+      [sellerId]
+    );
+
+    const { rows: pendingRows } = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0)::numeric AS pending
+       FROM payouts
+       WHERE seller_id = $1 AND status = 'requested'`,
       [sellerId]
     );
 
     const totalEarned = Number(earningsRows[0].total_earned || 0);
-    const reserved = Number(reservedRows[0].reserved || 0);
-    const availableBalance = Math.max(0, totalEarned - reserved);
+    const processed = Number(processedRows[0].processed || 0);
+    const pending = Number(pendingRows[0].pending || 0);
+    const availableBalance = Math.max(0, totalEarned - processed);
 
-    res.json({ success: true, data: rows, available_balance: availableBalance });
+    res.json({ success: true, data: rows, available_balance: availableBalance, pending_payout: pending });
   } catch (err) {
     console.error("seller payouts error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -729,11 +737,16 @@ router.patch("/returns/:return_id", async (req, res) => {
     const sellerId = await getSellerId(req.user.userId);
 
     const { rows: retRows } = await client.query(
-      `SELECT rr.return_id, rr.order_item_id, oi.variant_id, oi.quantity,
-              so.seller_order_id, so.order_id, so.seller_id
+      `SELECT rr.return_id, rr.order_item_id, oi.variant_id, oi.quantity, oi.price,
+              so.seller_order_id, so.order_id, so.seller_id,
+              o.customer_id, c.user_id, p.name AS product_name
        FROM return_requests rr
        JOIN order_items oi      ON oi.order_item_id   = rr.order_item_id
        JOIN seller_orders so    ON so.seller_order_id = oi.seller_order_id
+       JOIN orders o            ON o.order_id         = so.order_id
+       JOIN customers c         ON c.customer_id      = o.customer_id
+       JOIN product_variants pv ON pv.variant_id      = oi.variant_id
+       JOIN products p          ON p.product_id       = pv.product_id
        WHERE rr.return_id = $1 AND so.seller_id = $2`,
       [req.params.return_id, sellerId]
     );
@@ -754,6 +767,30 @@ router.patch("/returns/:return_id", async (req, res) => {
       await client.query(
         `UPDATE product_variants SET stock = stock + $1 WHERE variant_id = $2`,
         [ret.quantity, ret.variant_id]
+      );
+
+      // Get payment information for refund
+      const { rows: paymentRows } = await client.query(
+        `SELECT payment_id FROM payments WHERE order_id = $1 LIMIT 1`,
+        [ret.order_id]
+      );
+      
+      if (paymentRows.length) {
+        const paymentId = paymentRows[0].payment_id;
+        const refundAmount = Number(ret.price) * ret.quantity;
+
+        // Create refund record
+        await client.query(
+          `INSERT INTO refunds (payment_id, amount, status) VALUES ($1, $2, 'processed')`,
+          [paymentId, refundAmount]
+        );
+      }
+
+      // Send refund notification to customer
+      const refundAmount = Number(ret.price) * ret.quantity;
+      await client.query(
+        `INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`,
+        [ret.user_id, `Your refund of ₹${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed.`]
       );
 
       await client.query(

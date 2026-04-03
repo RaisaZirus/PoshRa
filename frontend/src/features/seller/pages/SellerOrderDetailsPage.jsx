@@ -21,7 +21,7 @@ function StatusBadge({ status }) {
 
 const STATUS_TRANSITIONS = {
   pending: ["processing", "cancelled"],
-  processing: ["shipped", "cancelled"],
+  processing: ["cancelled"],
   shipped: ["delivered"],
   delivered: [], cancelled: [],
 };
@@ -34,7 +34,7 @@ export default function SellerOrderDetailsPage() {
   const [updating, setUpdating] = React.useState(false);
   const [showShipForm, setShowShipForm] = React.useState(false);
   const [returns, setReturns] = React.useState([]);
-  const [shipForm, setShipForm] = React.useState({ tracking_number: "", courier_name: "" });
+  const [shipForm, setShipForm] = React.useState({ courier_name: "" });
   const [error, setError] = React.useState("");
 
   const load = React.useCallback(() => {
@@ -68,7 +68,11 @@ export default function SellerOrderDetailsPage() {
     try {
       await fetchWithAuth("/api/seller/shipments", {
         method: "POST",
-        body: JSON.stringify({ seller_order_id: Number(seller_order_id), ...shipForm }),
+        body: JSON.stringify({ 
+          seller_order_id: Number(seller_order_id), 
+          courier_name: shipForm.courier_name,
+          tracking_number: order.tracking_number 
+        }),
       });
       setShowShipForm(false);
       load();
@@ -189,10 +193,12 @@ export default function SellerOrderDetailsPage() {
                   <span style={{ fontSize: 13, color: COLORS.olive }}>Courier</span>
                   <span style={{ fontSize: 13, fontWeight: 700 }}>{shipment.courier_name || "—"}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, color: COLORS.olive }}>Tracking</span>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{shipment.tracking_number || "—"}</span>
-                </div>
+                {shipment.tracking_number && (
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 13, color: COLORS.olive }}>Tracking</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{shipment.tracking_number}</span>
+                  </div>
+                )}
               </div>
             ) : order.status === "processing" ? (
               !showShipForm ? (
@@ -202,11 +208,12 @@ export default function SellerOrderDetailsPage() {
                 </button>
               ) : (
                 <form onSubmit={submitShipment} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, color: COLORS.olive }}>Tracking Number</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{order.tracking_number || "—"}</span>
+                  </div>
                   <input placeholder="Courier name (e.g. DHL)" value={shipForm.courier_name}
                     onChange={(e) => setShipForm((s) => ({ ...s, courier_name: e.target.value }))}
-                    style={{ padding: "9px 12px", borderRadius: 10, border: `1px solid rgba(32,29,24,0.2)`, fontSize: 13 }} />
-                  <input placeholder="Tracking number" value={shipForm.tracking_number}
-                    onChange={(e) => setShipForm((s) => ({ ...s, tracking_number: e.target.value }))}
                     style={{ padding: "9px 12px", borderRadius: 10, border: `1px solid rgba(32,29,24,0.2)`, fontSize: 13 }} />
                   <div style={{ display: "flex", gap: 8 }}>
                     <button type="submit" disabled={updating}
