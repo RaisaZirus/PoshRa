@@ -31,7 +31,7 @@ export default function SellerProductCreatePage() {
   });
 
   const [variants, setVariants] = React.useState([
-    { sku: "", price: "", discount_price: "", stock: "" }
+    { sku: "", price: "", discount_percentage: "", stock: "" }
   ]);
 
   const [images, setImages] = React.useState([
@@ -53,7 +53,7 @@ export default function SellerProductCreatePage() {
   }, []);
 
   const setVariant = (i, key, val) => setVariants((prev) => prev.map((v, idx) => idx === i ? { ...v, [key]: val } : v));
-  const addVariant = () => setVariants((prev) => [...prev, { sku: "", price: "", discount_price: "", stock: "" }]);
+  const addVariant = () => setVariants((prev) => [...prev, { sku: "", price: "", discount_percentage: "", stock: "" }]);
   const removeVariant = (i) => setVariants((prev) => prev.filter((_, idx) => idx !== i));
 
   const setImage = (i, key, val) => setImages((prev) => prev.map((img, idx) => {
@@ -80,12 +80,17 @@ export default function SellerProductCreatePage() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         brand: form.brand.trim() || null,
-        variants: variants.map((v) => ({
-          sku: v.sku.trim(),
-          price: parseFloat(v.price),
-          discount_price: v.discount_price ? parseFloat(v.discount_price) : null,
-          stock: parseInt(v.stock),
-        })),
+        variants: variants.map((v) => {
+          const price = parseFloat(v.price);
+          const discountPercentage = v.discount_percentage ? parseFloat(v.discount_percentage) : 0;
+          const discountPrice = discountPercentage > 0 ? price * (1 - discountPercentage / 100) : null;
+          return {
+            sku: v.sku.trim(),
+            price: price,
+            discount_price: discountPrice,
+            stock: parseInt(v.stock),
+          };
+        }),
         images: images.map((img) => ({
           image_url: img.image_url.trim(),
           is_primary: img.is_primary,
@@ -183,12 +188,12 @@ export default function SellerProductCreatePage() {
                 <Input value={v.sku} onChange={(e) => setVariant(i, "sku", e.target.value)} placeholder="SKU-001" />
               </div>
               <div>
-                {i === 0 && <Label>Price ₹</Label>}
+                {i === 0 && <Label>Price ৳</Label>}
                 <Input type="number" value={v.price} onChange={(e) => setVariant(i, "price", e.target.value)} placeholder="999" />
               </div>
               <div>
-                {i === 0 && <Label>Discount ₹</Label>}
-                <Input type="number" value={v.discount_price} onChange={(e) => setVariant(i, "discount_price", e.target.value)} placeholder="—" />
+                {i === 0 && <Label>Discount %</Label>}
+                <Input type="number" value={v.discount_percentage} onChange={(e) => setVariant(i, "discount_percentage", e.target.value)} placeholder="10" />
               </div>
               <div>
                 {i === 0 && <Label>Stock</Label>}
@@ -250,3 +255,4 @@ export default function SellerProductCreatePage() {
     </div>
   );
 }
+

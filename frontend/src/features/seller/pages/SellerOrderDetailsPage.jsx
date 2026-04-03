@@ -112,7 +112,7 @@ export default function SellerOrderDetailsPage() {
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 900, color: COLORS.ink, margin: "0 0 4px" }}>Sub-order #{seller_order_id}</h1>
           <p style={{ fontSize: 13, color: COLORS.olive, margin: 0 }}>
-            Order #{order.order_id} · {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+            Order #{order.order_id} · {new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
         <StatusBadge status={order.status} />
@@ -130,13 +130,13 @@ export default function SellerOrderDetailsPage() {
                   <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>SKU: {item.sku} · Qty: {item.quantity}</p>
                 </div>
                 <p style={{ fontWeight: 900, fontSize: 14, color: COLORS.ink, margin: 0 }}>
-                  ₹{(Number(item.price) * item.quantity).toLocaleString("en-IN")}
+                  ৳{(Number(item.price) * item.quantity).toLocaleString("en-BD")}
                 </p>
               </div>
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 12, fontWeight: 900, fontSize: 15 }}>
               <span>Subtotal</span>
-              <span>₹{Number(order.subtotal).toLocaleString("en-IN")}</span>
+              <span>৳{Number(order.subtotal).toLocaleString("en-BD")}</span>
             </div>
           </Card>
 
@@ -276,3 +276,4 @@ export default function SellerOrderDetailsPage() {
     </div>
   );
 }
+

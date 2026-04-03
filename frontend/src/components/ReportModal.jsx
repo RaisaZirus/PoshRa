@@ -271,3 +271,4 @@ export default function ReportModal({ entityType, entityId, entityLabel, onClose
     </div>
   );
 }
+

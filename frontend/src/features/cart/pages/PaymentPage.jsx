@@ -271,14 +271,14 @@ export default function PaymentPage() {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive }}>
                   <span>Amount</span>
-                  <span>₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</span>
+                  <span>₹{Number(order.total_amount || 0).toLocaleString("en-BD")}</span>
                 </div>
               </div>
 
               <div style={{ borderTop: "1px solid rgba(32,29,24,0.1)", paddingTop: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 900 }}>
                   <span>Total</span>
-                  <span style={{ color: COLORS.primary }}>₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</span>
+                  <span style={{ color: COLORS.primary }}>₹{Number(order.total_amount || 0).toLocaleString("en-BD")}</span>
                 </div>
               </div>
             </Card>
@@ -320,7 +320,7 @@ export default function PaymentPage() {
                       Amount
                     </p>
                     <p style={{ fontSize: 14, fontWeight: 800, color: COLORS.ink }}>
-                      ₹{Number(payment.amount).toLocaleString("en-IN")}
+                      ₹{Number(payment.amount).toLocaleString("en-BD")}
                     </p>
                   </div>
 
@@ -404,3 +404,5 @@ export default function PaymentPage() {
     </div>
   );
 }
+
+

@@ -88,7 +88,7 @@ export default function SellerQnAPage() {
               {/* Question */}
               <div style={{ marginBottom: 12 }}>
                 <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 4px", fontWeight: 700 }}>
-                  {q.customer_name} · {new Date(q.created_at).toLocaleDateString("en-IN")}
+                  {q.customer_name} · {new Date(q.created_at).toLocaleDateString("en-BD")}
                 </p>
                 <p style={{ fontWeight: 700, fontSize: 14, color: COLORS.ink, margin: 0 }}>{q.question}</p>
               </div>
@@ -97,7 +97,7 @@ export default function SellerQnAPage() {
               {q.answer ? (
                 <div style={{ background: COLORS.soft, borderRadius: 10, padding: "10px 14px" }}>
                   <p style={{ fontSize: 12, color: "#166534", fontWeight: 800, margin: "0 0 4px" }}>
-                    Your answer · {new Date(q.answered_at).toLocaleDateString("en-IN")}
+                    Your answer · {new Date(q.answered_at).toLocaleDateString("en-BD")}
                   </p>
                   <p style={{ fontSize: 13, color: COLORS.ink, margin: 0 }}>{q.answer}</p>
                 </div>
@@ -130,3 +130,4 @@ export default function SellerQnAPage() {
     </div>
   );
 }
+

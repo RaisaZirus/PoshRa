@@ -415,39 +415,54 @@ function CampaignHero({ campaign }) {
           </div>
         </div>
 
-        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 12 }}>
-          {(campaign.highlights || []).slice(0, 3).map((h) => (
-            <Card
-              key={h.variant_id}
-              style={{
-                gridColumn: "span 4",
-                background: COLORS.bg,
-                padding: 12,
-                border: `1px solid rgba(32,29,24,0.14)`,
-              }}
-            >
-              <div style={{ fontSize: 12, color: "rgba(32,29,24,0.7)", fontWeight: 800 }}>Highlighted deal</div>
-              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 900, color: COLORS.ink }}>{h.name}</div>
-              <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 900, color: COLORS.ink }}>{money(h.discount_price)}</div>
-                <Link
-                  to={`/p/${h.product_id}`}
+        <div style={{ marginTop: 14 }}>
+          {(campaign.highlights || []).length === 0 ? (
+            <div style={{ padding: 14, color: "rgba(32,29,24,0.72)", fontSize: 13 }}>No campaign products yet. Sellers can add products to campaigns from their dashboard.</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 12 }}>
+              {(campaign.highlights || []).slice(0, 4).map((h) => (
+                <Card
+                  key={`${h.variant_id}-${h.product_id}`}
                   style={{
-                    textDecoration: "none",
-                    fontWeight: 900,
-                    color: COLORS.ink,
-                    background: COLORS.primary,
-                    border: `1px solid ${COLORS.ink}`,
-                    padding: "8px 10px",
-                    borderRadius: 12,
-                    fontSize: 12,
+                    gridColumn: "span 3",
+                    background: COLORS.bg,
+                    padding: 12,
+                    border: `1px solid rgba(32,29,24,0.14)`,
                   }}
                 >
-                  View
-                </Link>
-              </div>
-            </Card>
-          ))}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <img
+                      src={h.image_url || "https://via.placeholder.com/80?text=?"}
+                      alt={h.name}
+                      style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 10, background: COLORS.soft }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: COLORS.ink, lineHeight: 1.2 }}>{h.name}</div>
+                      <div style={{ fontSize: 11, color: "rgba(32,29,24,0.65)", marginTop: 2 }}>{h.store_name || "Seller item"}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: COLORS.ink }}>{money(h.discount_price || h.price)}</div>
+                    <Link
+                      to={`/p/${h.product_id}`}
+                      style={{
+                        textDecoration: "none",
+                        fontWeight: 900,
+                        color: COLORS.ink,
+                        background: COLORS.primary,
+                        border: `1px solid ${COLORS.ink}`,
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        fontSize: 12,
+                      }}
+                    >
+                      View
+                    </Link>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -508,9 +523,9 @@ export default function HomePage() {
       setLoading(true);
 
       const [camps, cats, sts, prods] = await Promise.all([
-        safeFetchJSON("/api/campaigns/active", MOCK.campaigns),
-        safeFetchJSON("/api/categories", MOCK.categories),
-        safeFetchJSON("/api/stores", MOCK.stores),
+        safeFetchJSON("/api/campaigns/active", MOCK.campaigns).then(r => Array.isArray(r) ? r : (r?.data ?? MOCK.campaigns)),
+        safeFetchJSON("/api/categories", MOCK.categories).then(r => Array.isArray(r) ? r : (r?.data ?? MOCK.categories)),
+        safeFetchJSON("/api/stores", MOCK.stores).then(r => Array.isArray(r) ? r : (r?.data ?? MOCK.stores)),
         // ideally returns products with image + min price + discount info
         safeFetchJSON("/api/products/featured", MOCK.products).then(r => Array.isArray(r) ? r : (r?.data ?? MOCK.products)),
       ]);
@@ -593,10 +608,23 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* campaign hero */}
-      <div style={{ marginTop: 14 }}>
-        <CampaignHero campaign={activeCampaign} />
-      </div>
+      {/* campaign heroes */}
+      {campaigns.length > 0 ? (
+        campaigns.map((camp) => (
+          <div key={camp.campaign_id} style={{ marginTop: 14 }}>
+            <CampaignHero campaign={camp} />
+          </div>
+        ))
+      ) : (
+        <div style={{ marginTop: 14 }}>
+          <Card style={{ padding: 14, background: COLORS.soft }}>
+            <div style={{ fontWeight: 900 }}>No active campaigns right now</div>
+            <div style={{ fontSize: 12, color: "rgba(32,29,24,0.75)", marginTop: 6 }}>
+              Check back soon for seller campaign deals.
+            </div>
+          </Card>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ marginTop: 16, padding: 14 }}>
@@ -704,3 +732,4 @@ export default function HomePage() {
     </div>
   );
 }
+

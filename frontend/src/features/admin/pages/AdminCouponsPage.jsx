@@ -199,7 +199,7 @@ export default function AdminCouponsPage() {
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: C.olive }}>{coupon.discount_type}</td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: C.olive }}>{coupon.discount_value}</td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: C.olive }}>{coupon.expiry_date ? new Date(coupon.expiry_date).toLocaleDateString("en-IN") : "Never"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: C.olive }}>{coupon.expiry_date ? new Date(coupon.expiry_date).toLocaleDateString("en-BD") : "Never"}</td>
                     <td style={{ padding: "12px 16px" }}>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => handleEdit(coupon)} style={{ padding: "6px 12px", background: "#DBEAFE", color: "#1E40AF", fontWeight: 800, fontSize: 11, borderRadius: 6, border: "none", cursor: "pointer" }}>Edit</button>
@@ -216,3 +216,5 @@ export default function AdminCouponsPage() {
     </div>
   );
 }
+
+

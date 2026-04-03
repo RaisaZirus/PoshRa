@@ -1,3 +1,4 @@
+import fs from "fs";
 import { pool } from "../db.js";
 
 // ─── GET /api/products ────────────────────────────────────────────────────────
@@ -14,9 +15,10 @@ export const getAllProducts = async (req, res) => {
         p.brand,
         p.status,
         p.created_at,
-        MIN(v.price)       AS price,
-        MAX(pi.image_url)  AS image,
-        SUM(v.stock)       AS total_stock,
+        MIN(v.price) AS min_price,
+        MIN(v.discount_price) AS discount_price,
+        MAX(pi.image_url) AS image,
+        SUM(v.stock) AS total_stock,
         COALESCE((
           SELECT SUM(oi.quantity)
           FROM order_items oi
@@ -24,8 +26,8 @@ export const getAllProducts = async (req, res) => {
           WHERE pv2.product_id = p.product_id
         ), 0)::int AS total_sold
       FROM products p
-      LEFT JOIN product_variants v  ON v.product_id  = p.product_id
-      LEFT JOIN product_images pi   ON pi.product_id = p.product_id
+      LEFT JOIN product_variants v ON v.product_id = p.product_id
+      LEFT JOIN product_images pi ON pi.product_id = p.product_id
       WHERE p.status = 'active'
       GROUP BY p.product_id
       ORDER BY p.created_at DESC
@@ -125,70 +127,69 @@ export const getProduct = async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      `SELECT
-        p.product_id,
-        p.store_id,
-        p.category_id,
-        p.name,
-        p.description,
-        p.brand,
-        p.status,
-        p.created_at,
-        s.store_name,
-        s.store_slug,
-        COALESCE(AVG(r.rating), 0)::numeric(3,1)            AS avg_rating,
-        COUNT(DISTINCT r.review_id)::int                     AS reviews_count,
-        COALESCE((
-          SELECT SUM(oi.quantity)
-          FROM order_items oi
-          JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
-          WHERE pv2.product_id = p.product_id
-        ), 0)::int AS total_sold,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'variant_id',     pv.variant_id,
-          'sku',            pv.sku,
-          'price',          pv.price,
-          'discount_price', pv.discount_price,
-          'stock',          pv.stock
-        )) FILTER (WHERE pv.variant_id IS NOT NULL), '[]'::json) AS variants,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'image_id',  pi.image_id,
-          'image_url', pi.image_url,
-          'is_primary',pi.is_primary
-        )) FILTER (WHERE pi.image_id IS NOT NULL), '[]'::json) AS images,
-        COALESCE(json_agg(DISTINCT jsonb_build_object(
-          'attribute_id', pa.attribute_id,
-          'name',         pa.name,
-          'value',        pa.value
-        )) FILTER (WHERE pa.attribute_id IS NOT NULL), '[]'::json) AS attributes
-       FROM products p
-       JOIN stores s           ON s.store_id    = p.store_id
-       LEFT JOIN reviews r     ON r.product_id  = p.product_id
-       LEFT JOIN product_variants pv ON pv.product_id = p.product_id
-       LEFT JOIN product_images pi   ON pi.product_id = p.product_id
-       LEFT JOIN product_attributes pa ON pa.product_id = p.product_id
-       WHERE p.product_id = $1
-       GROUP BY p.product_id, s.store_name, s.store_slug`,
-      [id]
-    );
+    const sql = `SELECT
+      p.product_id,
+      p.store_id,
+      p.category_id,
+      p.name,
+      p.description,
+      p.brand,
+      p.status,
+      p.created_at,
+      s.store_name,
+      s.store_slug,
+      COALESCE(AVG(r.rating), 0)::numeric(3,1) AS avg_rating,
+      COUNT(DISTINCT r.review_id)::int AS reviews_count,
+      COALESCE((
+        SELECT SUM(oi.quantity)
+        FROM order_items oi
+        JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
+        WHERE pv2.product_id = p.product_id
+      ), 0)::int AS total_sold,
+      COALESCE(json_agg(DISTINCT jsonb_build_object(
+        'variant_id', pv.variant_id,
+        'sku', pv.sku,
+        'price', pv.price,
+        'discount_price', pv.discount_price,
+        'stock', pv.stock
+      )) FILTER (WHERE pv.variant_id IS NOT NULL), '[]'::json) AS variants,
+      COALESCE(json_agg(DISTINCT jsonb_build_object(
+        'image_id', pi.image_id,
+        'image_url', pi.image_url,
+        'is_primary', pi.is_primary
+      )) FILTER (WHERE pi.image_id IS NOT NULL), '[]'::json) AS images,
+      COALESCE(json_agg(DISTINCT jsonb_build_object(
+        'attribute_id', pa.attribute_id,
+        'name', pa.name,
+        'value', pa.value
+      )) FILTER (WHERE pa.attribute_id IS NOT NULL), '[]'::json) AS attributes
+     FROM products p
+     JOIN stores s ON s.store_id = p.store_id
+     LEFT JOIN reviews r ON r.product_id = p.product_id
+     LEFT JOIN product_variants pv ON pv.product_id = p.product_id
+     LEFT JOIN product_images pi ON pi.product_id = p.product_id
+     LEFT JOIN product_attributes pa ON pa.product_id = p.product_id
+     WHERE p.product_id = $1
+     GROUP BY p.product_id, s.store_name, s.store_slug`;
 
+    const result = await pool.query(sql, [id]);
     const product = result.rows[0];
+
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
 
-    const price = product.variants?.length
-      ? Math.min(...product.variants.map((v) => Number(v.price)))
+    const effectivePrice = product.variants?.length
+      ? Math.min(...product.variants.map((v) => Number(v.discount_price ?? v.price)))
       : null;
     const image = product.images?.length ? product.images[0].image_url : null;
 
     res.status(200).json({
       success: true,
-      data: { id: product.product_id, ...product, price, image },
+      data: { id: product.product_id, ...product, price: effectivePrice, image },
     });
   } catch (error) {
-    console.error("Error in getProduct:", error.message);
+    console.error("Error in getProduct:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
@@ -377,7 +378,9 @@ export const searchProducts = async (req, res) => {
 
     const dataQuery = `
       SELECT p.product_id AS id, p.*,
-             MIN(v.price) AS price, MAX(v.price) AS max_price,
+             MIN(v.price) AS min_price,
+             MIN(v.discount_price) AS discount_price,
+             MAX(v.price) AS max_price,
              SUM(v.stock) AS total_stock,
              MAX(pi.image_url) AS image,
              COUNT(DISTINCT vl.view_id)::int AS view_count
@@ -470,3 +473,4 @@ export const autocomplete = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+

@@ -85,13 +85,13 @@ export default function SellerReturnsPage() {
                     <StatusBadge status={r.status} />
                   </div>
                   <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 4px" }}>
-                    SKU: {r.sku} · Qty: {r.quantity} · ₹{(Number(r.price) * r.quantity).toLocaleString("en-IN")}
+                    SKU: {r.sku} · Qty: {r.quantity} · ৳{(Number(r.price) * r.quantity).toLocaleString("en-BD")}
                   </p>
                   <p style={{ fontSize: 12, color: COLORS.ink, margin: "0 0 4px" }}>
                     <strong>Reason:</strong> {r.reason}
                   </p>
                   <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>
-                    By {r.customer_name} · {new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    By {r.customer_name} · {new Date(r.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
@@ -126,3 +126,4 @@ export default function SellerReturnsPage() {
     </div>
   );
 }
+

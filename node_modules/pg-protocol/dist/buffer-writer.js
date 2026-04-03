@@ -79,3 +79,4 @@ class Writer {
 }
 exports.Writer = Writer;
 //# sourceMappingURL=buffer-writer.js.map
+

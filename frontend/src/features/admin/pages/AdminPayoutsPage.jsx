@@ -77,7 +77,7 @@ export default function AdminPayoutsPage() {
   };
 
   const totalPages = Math.ceil(meta.total / meta.limit);
-  const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-IN")}`;
+  const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-BD")}`;
 
   const selectStyle = {
     padding: "9px 14px", borderRadius: 10,
@@ -232,3 +232,5 @@ export default function AdminPayoutsPage() {
     </div>
   );
 }
+
+

@@ -71,7 +71,7 @@ export default function SellerOrdersPage() {
                   Order #{o.order_id} <span style={{ fontWeight: 400, color: COLORS.olive, fontSize: 12 }}>· Sub-order #{o.seller_order_id}</span>
                 </p>
                 <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 6px" }}>
-                  {o.item_count} item{o.item_count !== 1 ? "s" : ""} · {new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  {o.item_count} item{o.item_count !== 1 ? "s" : ""} · {new Date(o.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}
                 </p>
                 <div style={{ display: "flex", gap: 6 }}>
                   <StatusBadge status={o.status} />
@@ -79,7 +79,7 @@ export default function SellerOrdersPage() {
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <p style={{ fontWeight: 900, fontSize: 16, color: COLORS.ink, margin: "0 0 4px" }}>₹{Number(o.subtotal).toLocaleString("en-IN")}</p>
+                <p style={{ fontWeight: 900, fontSize: 16, color: COLORS.ink, margin: "0 0 4px" }}>৳{Number(o.subtotal).toLocaleString("en-BD")}</p>
                 <p style={{ fontSize: 12, color: COLORS.olive, margin: 0, fontWeight: 700 }}>View →</p>
               </div>
             </Link>
@@ -89,3 +89,4 @@ export default function SellerOrdersPage() {
     </div>
   );
 }
+

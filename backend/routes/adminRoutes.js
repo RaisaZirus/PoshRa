@@ -64,7 +64,7 @@ router.get("/dashboard", async (req, res) => {
     const [
       usersRes, sellersRes, ordersRes, gmvRes,
       revenueRes, pendingKycRes, reportsRes,
-      kpiRes, trafficRes, financeRes,
+      kpiRes, trafficRes, financeRes, couponRes,
     ] = await Promise.all([
       pool.query("SELECT COUNT(*)::int AS total FROM users"),
       pool.query("SELECT COUNT(*)::int AS total FROM sellers"),
@@ -1114,4 +1114,6 @@ router.delete("/couriers/:courier_id", async (req, res) => {
 });
 
 export default router;
+
+
 

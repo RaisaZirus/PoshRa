@@ -267,7 +267,7 @@ CREATE TABLE coupons (
 CREATE TABLE order_coupons (
   order_coupon_id   BIGSERIAL PRIMARY KEY,
   order_id          BIGINT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
-  coupon_id         BIGINT NOT NULL REFERENCES coupons(coupon_id),
+  coupon_id         BIGINT NOT NULL REFERENCES coupons(coupon_id) ON DELETE CASCADE,
   applied_amount    NUMERIC(12,2) NOT NULL CHECK (applied_amount >= 0)
 );
 
@@ -282,6 +282,7 @@ CREATE TABLE campaign_products (
   campaign_id       BIGINT NOT NULL REFERENCES campaigns(campaign_id) ON DELETE CASCADE,
   variant_id        BIGINT NOT NULL REFERENCES product_variants(variant_id) ON DELETE CASCADE,
   discount_price    NUMERIC(12,2) CHECK (discount_price >= 0),
+  original_discount_price NUMERIC(12,2),
   PRIMARY KEY (campaign_id, variant_id)
 );
 
@@ -851,7 +852,6 @@ BEGIN
     JOIN stores s            ON s.store_id    = p.store_id
     WHERE ci.cart_id = v_cart_id
   LOOP
-    -- Compute this seller's subtotal
     SELECT COALESCE(SUM(COALESCE(pv.discount_price, pv.price) * ci.quantity), 0)
     INTO v_subtotal
     FROM cart_items ci
@@ -914,6 +914,29 @@ DECLARE
 BEGIN
   CALL place_order(p_customer_id, p_address_id, p_coupon_code, v_order_id, v_total);
   RETURN QUERY SELECT v_order_id, v_total;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ----------------------------------------------------------------------------- 
+-- Function: revert_campaign_prices
+-- Reverts discount_price for variants in ended campaigns
+-- Call periodically or via cron to clean up expired campaigns
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION revert_campaign_prices()
+RETURNS VOID AS $$
+BEGIN
+  UPDATE product_variants
+  SET discount_price = cp.original_discount_price
+  FROM campaign_products cp
+  JOIN campaigns c ON c.campaign_id = cp.campaign_id
+  WHERE product_variants.variant_id = cp.variant_id
+    AND NOW() > c.end_time;
+
+  -- Optionally delete ended campaign_products after reverting
+  DELETE FROM campaign_products
+  WHERE campaign_id IN (
+    SELECT campaign_id FROM campaigns WHERE NOW() > end_time
+  );
 END;
 $$ LANGUAGE plpgsql;
 

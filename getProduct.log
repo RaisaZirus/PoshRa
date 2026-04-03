@@ -1,0 +1,7 @@
+[getProduct 2026-04-03T20:48:48.020Z] called for req.params.id=1 parsed=1
+[getProduct 2026-04-03T20:48:48.020Z] executing query for id=1
+[getProduct 2026-04-03T20:48:48.020Z] error: syntax error at or near "E"
+error: syntax error at or near "E"
+    at E:\2-1\Poshradh\PoshRa\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async getProduct (file:///E:/2-1/Poshradh/PoshRa/backend/controllers/productController.js:136:20)

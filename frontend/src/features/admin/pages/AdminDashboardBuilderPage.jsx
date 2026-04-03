@@ -105,8 +105,8 @@ export default function AdminDashboardBuilderPage() {
 
   const sum = (arr, key) => arr.reduce((s, d) => s + (Number(d[key]) || 0), 0);
   const avg = (arr, key) => arr.length ? (sum(arr, key) / arr.length).toFixed(1) : 0;
-  const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-IN")}`;
-  const fmt2 = (n) => Number(n || 0).toLocaleString("en-IN");
+  const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-BD")}`;
+  const fmt2 = (n) => Number(n || 0).toLocaleString("en-BD");
 
   const TAB_STYLE = (active) => ({
     padding: "9px 20px", borderRadius: 10,
@@ -362,3 +362,5 @@ export default function AdminDashboardBuilderPage() {
     </div>
   );
 }
+
+

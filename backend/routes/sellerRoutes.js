@@ -318,11 +318,14 @@ router.get("/products", async (req, res) => {
               COUNT(DISTINCT pv.variant_id)::int AS variant_count,
               COALESCE((SELECT SUM(stock) FROM product_variants WHERE product_id = p.product_id), 0)::int AS total_stock,
               MIN(pv.price) AS min_price,
-              MAX(CASE WHEN pi.is_primary THEN pi.image_url END) AS image_url
+              MAX(CASE WHEN pi.is_primary THEN pi.image_url END) AS image_url,
+              COUNT(DISTINCT CASE WHEN c.campaign_id IS NOT NULL THEN pv.variant_id END)::int AS active_campaign_variants
        FROM products p
        JOIN stores s              ON s.store_id    = p.store_id
        LEFT JOIN product_variants pv ON pv.product_id = p.product_id
        LEFT JOIN product_images pi   ON pi.product_id = p.product_id
+       LEFT JOIN campaign_products cp ON cp.variant_id = pv.variant_id
+       LEFT JOIN campaigns c ON c.campaign_id = cp.campaign_id AND NOW() BETWEEN c.start_time AND c.end_time
        WHERE s.seller_id = $1
        GROUP BY p.product_id
        ORDER BY p.created_at DESC`,
@@ -331,6 +334,192 @@ router.get("/products", async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error("seller products error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/seller/campaigns/active ─────────────────────────────────────────────
+router.get("/campaigns/active", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT campaign_id, name, start_time, end_time
+       FROM campaigns
+       WHERE NOW() BETWEEN start_time AND end_time
+       ORDER BY start_time`);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("seller active campaigns error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/seller/campaigns/products ─────────────────────────────────────────
+router.get("/campaigns/products", async (req, res) => {
+  try {
+    const sellerId = await getSellerId(req.user.userId);
+
+    const { rows } = await pool.query(
+      `SELECT DISTINCT
+         p.product_id,
+         cp.campaign_id,
+         c.name AS campaign_name,
+         pv.variant_id,
+         cp.discount_price,
+         cp.original_discount_price
+       FROM campaign_products cp
+       JOIN campaigns c ON c.campaign_id = cp.campaign_id AND NOW() BETWEEN c.start_time AND c.end_time
+       JOIN product_variants pv ON pv.variant_id = cp.variant_id
+       JOIN products p ON p.product_id = pv.product_id
+       JOIN stores s ON s.store_id = p.store_id
+       WHERE s.seller_id = $1
+       ORDER BY p.product_id, cp.campaign_id`,
+      [sellerId]
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("seller campaign products error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── POST /api/seller/campaigns/:campaign_id/products ─────────────────────────
+router.post("/campaigns/:campaign_id/products", async (req, res) => {
+  const { campaign_id } = req.params;
+  const { variant_id, discount_price } = req.body;
+  if (!variant_id) {
+    return res.status(400).json({ success: false, message: "variant_id is required" });
+  }
+
+  try {
+    const sellerId = await getSellerId(req.user.userId);
+
+    // Check campaign exists and active
+    const campRes = await pool.query(
+      `SELECT campaign_id FROM campaigns WHERE campaign_id = $1 AND NOW() BETWEEN start_time AND end_time`,
+      [campaign_id]
+    );
+    if (!campRes.rows.length) {
+      return res.status(400).json({ success: false, message: "Active campaign not found" });
+    }
+
+    // check variant belongs to a product of this seller
+    const varRes = await pool.query(
+      `SELECT pv.variant_id FROM product_variants pv
+       JOIN products p ON p.product_id = pv.product_id
+       JOIN stores s ON s.store_id = p.store_id
+       WHERE pv.variant_id = $1 AND s.seller_id = $2`,
+      [variant_id, sellerId]
+    );
+    if (!varRes.rows.length) {
+      return res.status(403).json({ success: false, message: "Variant does not belong to your store" });
+    }
+
+    // Get current discount_price
+    const currentRes = await pool.query(
+      `SELECT discount_price FROM product_variants WHERE variant_id = $1`,
+      [variant_id]
+    );
+    const originalDiscount = currentRes.rows[0]?.discount_price || null;
+
+    await pool.query(
+      `INSERT INTO campaign_products (campaign_id, variant_id, discount_price, original_discount_price)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (campaign_id, variant_id) DO UPDATE SET
+         discount_price = EXCLUDED.discount_price,
+         original_discount_price = COALESCE(campaign_products.original_discount_price, EXCLUDED.original_discount_price)`,
+      [campaign_id, variant_id, discount_price || null, originalDiscount]
+    );
+
+    // Update the variant's discount_price to the campaign price
+    await pool.query(
+      `UPDATE product_variants SET discount_price = $1 WHERE variant_id = $2`,
+      [discount_price || null, variant_id]
+    );
+
+    res.json({ success: true, message: "Product added to campaign" });
+  } catch (err) {
+    console.error("seller campaign add product error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/seller/campaigns/:campaign_id/products ────────────────────────
+router.get("/campaigns/:campaign_id/products", async (req, res) => {
+  const { campaign_id } = req.params;
+
+  try {
+    const sellerId = await getSellerId(req.user.userId);
+
+    // Get products in campaign for this seller
+    const { rows } = await pool.query(
+      `SELECT DISTINCT
+         p.product_id,
+         p.name,
+         p.brand,
+         cp.variant_id,
+         cp.discount_price,
+         cp.original_discount_price
+       FROM campaign_products cp
+       JOIN product_variants pv ON pv.variant_id = cp.variant_id
+       JOIN products p ON p.product_id = pv.product_id
+       JOIN stores s ON s.store_id = p.store_id
+       WHERE cp.campaign_id = $1 AND s.seller_id = $2
+       ORDER BY p.created_at DESC`,
+      [campaign_id, sellerId]
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("seller campaign get products error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── DELETE /api/seller/campaigns/:campaign_id/products/:variant_id ───────────
+router.delete("/campaigns/:campaign_id/products/:variant_id", async (req, res) => {
+  const { campaign_id, variant_id } = req.params;
+
+  try {
+    const sellerId = await getSellerId(req.user.userId);
+
+    // Check variant belongs to seller
+    const varRes = await pool.query(
+      `SELECT pv.variant_id FROM product_variants pv
+       JOIN products p ON p.product_id = pv.product_id
+       JOIN stores s ON s.store_id = p.store_id
+       WHERE pv.variant_id = $1 AND s.seller_id = $2`,
+      [variant_id, sellerId]
+    );
+    if (!varRes.rows.length) {
+      return res.status(403).json({ success: false, message: "Variant does not belong to your store" });
+    }
+
+    // Get original discount_price
+    const origRes = await pool.query(
+      `SELECT original_discount_price FROM campaign_products WHERE campaign_id = $1 AND variant_id = $2`,
+      [campaign_id, variant_id]
+    );
+    const originalDiscount = origRes.rows[0]?.original_discount_price || null;
+
+    // Delete from campaign_products
+    const delRes = await pool.query(
+      `DELETE FROM campaign_products WHERE campaign_id = $1 AND variant_id = $2`,
+      [campaign_id, variant_id]
+    );
+    if (!delRes.rowCount) {
+      return res.status(404).json({ success: false, message: "Product not in campaign" });
+    }
+
+    // Revert variant's discount_price
+    await pool.query(
+      `UPDATE product_variants SET discount_price = $1 WHERE variant_id = $2`,
+      [originalDiscount, variant_id]
+    );
+
+    res.json({ success: true, message: "Product removed from campaign" });
+  } catch (err) {
+    console.error("seller campaign remove product error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
@@ -523,6 +712,31 @@ router.get("/stores", async (req, res) => {
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error("get stores error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── DELETE /api/seller/stores/:store_id ────────────────────────────────────────
+router.delete("/stores/:store_id", async (req, res) => {
+  try {
+    const sellerId = await getSellerId(req.user.userId);
+    const storeId = req.params.store_id;
+
+    // Check if store belongs to seller
+    const { rows } = await pool.query(
+      "SELECT store_id FROM stores WHERE store_id = $1 AND seller_id = $2",
+      [storeId, sellerId]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Store not found" });
+    }
+
+    // Delete store (cascade will handle related data)
+    await pool.query("DELETE FROM stores WHERE store_id = $1", [storeId]);
+
+    res.json({ success: true, message: "Store deleted successfully" });
+  } catch (err) {
+    console.error("delete store error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
@@ -913,3 +1127,4 @@ router.get("/couriers", async (req, res) => {
 });
 
 export default router;
+

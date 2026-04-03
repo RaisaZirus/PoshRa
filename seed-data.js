@@ -32,3 +32,5 @@ console.log('\nOr run this in psql:');
 console.log('psql -h localhost -p 5433 -U postgres -d Poshra << EOF');
 console.log(seedSQL);
 console.log('EOF');
+
+

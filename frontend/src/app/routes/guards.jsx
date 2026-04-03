@@ -46,3 +46,4 @@ export function RequireRole({ allowed = [], children }) {
 
   return children ? children : <Outlet />;
 }
+

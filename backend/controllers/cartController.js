@@ -247,3 +247,5 @@ export async function clearCart(req, res) {
     client.release();
   }
 }
+
+

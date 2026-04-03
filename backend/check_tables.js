@@ -9,3 +9,4 @@ import { pool } from './db.js';
     console.error('Error:', error);
   }
 })();
+

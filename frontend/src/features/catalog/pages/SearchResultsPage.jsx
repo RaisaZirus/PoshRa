@@ -74,11 +74,11 @@ function ProductCard({ p, onAddToCart }) {
           <p style={{ fontSize: 11, color: COLORS.olive, margin: "0 0 6px" }}>{p.brand || "—"}</p>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{ fontWeight: 900, fontSize: 15, color: COLORS.ink }}>
-              ₹{Number(price).toLocaleString("en-IN")}
+              ₹{Number(price).toLocaleString("en-BD")}
             </span>
             {hasDiscount && (
               <span style={{ fontSize: 11, color: "rgba(32,29,24,0.4)", textDecoration: "line-through" }}>
-                ₹{Number(original).toLocaleString("en-IN")}
+                ₹{Number(original).toLocaleString("en-BD")}
               </span>
             )}
           </div>
@@ -429,3 +429,4 @@ export default function SearchResultsPage() {
     </div>
   );
 }
+

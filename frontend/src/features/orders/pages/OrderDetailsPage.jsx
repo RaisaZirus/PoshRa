@@ -172,6 +172,14 @@ export default function OrderDetailsPage() {
   const shipmentForSeller = (sellerOrderId) =>
     shipments.find((s) => s.seller_order_id === sellerOrderId);
 
+  const computedTotal = sellerOrders.reduce((sTotal, so) => {
+    return sTotal + (so.items || []).reduce((itemSum, item) => {
+      return itemSum + Number(item.price) * Number(item.quantity);
+    }, 0);
+  }, 0);
+
+  const campaignAdjusted = Number(computedTotal) !== Number(order.total_amount);
+
   return (
     <div style={{
       background: COLORS.soft, color: COLORS.ink,
@@ -207,7 +215,7 @@ export default function OrderDetailsPage() {
               Order #{order.order_id}
             </h1>
             <p style={{ fontSize: 13, color: COLORS.olive, margin: 0 }}>
-              Placed on {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+              Placed on {new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "long", year: "numeric" })}
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -297,12 +305,17 @@ export default function OrderDetailsPage() {
                             Variant #{item.variant_id}
                           </p>
                           <p style={{ color: COLORS.olive, margin: "2px 0 0" }}>
-                            Qty: {item.quantity} × ₹{Number(item.price).toLocaleString("en-IN")}
+                            Qty: {item.quantity} × ₹{Number(item.price).toLocaleString("en-BD")}
                           </p>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <p style={{ fontWeight: 900, color: COLORS.ink, margin: 0 }}>
-                            ₹{(Number(item.price) * item.quantity).toLocaleString("en-IN")}
+                            ₹{(Number(item.price) * item.quantity).toLocaleString("en-BD")}
+                            {item.original_price && Number(item.original_price) !== Number(item.price) ? (
+                              <span style={{ fontSize: 11, color: "#16a34a", marginLeft: 8 }}>
+                                (campaign ₹{Number(item.price).toLocaleString("en-BD")})
+                              </span>
+                            ) : null}
                           </p>
                           {so.status === "delivered" && (
                             <Link to={`/returns/${item.order_item_id}`}
@@ -318,7 +331,7 @@ export default function OrderDetailsPage() {
                   {/* Subtotal */}
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 12, borderTop: `1px solid rgba(32,29,24,0.1)`, marginBottom: shipment ? 14 : 0 }}>
                     <span style={{ color: COLORS.olive }}>Subtotal</span>
-                    <span style={{ fontWeight: 900 }}>₹{Number(so.subtotal).toLocaleString("en-IN")}</span>
+                    <span style={{ fontWeight: 900 }}>₹{Number(so.subtotal).toLocaleString("en-BD")}</span>
                   </div>
 
                   {/* Shipment tracking */}
@@ -341,12 +354,12 @@ export default function OrderDetailsPage() {
                       )}
                       {shipment.shipped_at && (
                         <p style={{ fontSize: 12, color: COLORS.olive, margin: "4px 0 0" }}>
-                          Shipped: {new Date(shipment.shipped_at).toLocaleDateString("en-IN")}
+                          Shipped: {new Date(shipment.shipped_at).toLocaleDateString("en-BD")}
                         </p>
                       )}
                       {shipment.delivered_at && (
                         <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 700, margin: "4px 0 0" }}>
-                          Delivered: {new Date(shipment.delivered_at).toLocaleDateString("en-IN")}
+                          Delivered: {new Date(shipment.delivered_at).toLocaleDateString("en-BD")}
                         </p>
                       )}
                     </div>
@@ -363,34 +376,32 @@ export default function OrderDetailsPage() {
               <InfoRow label="Order ID" value={`#${order.order_id}`} />
               <InfoRow
                 label="Date"
-                value={new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                value={new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}
               />
               <InfoRow label="Order status" value={<StatusBadge status={order.order_status} />} />
               <InfoRow label="Payment status" value={<StatusBadge status={order.payment_status} />} />
               {order.coupon_code && (
                 <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(22,163,74,0.08)", borderRadius: 10 }}>
                   <p style={{ margin: 0, fontSize: 12, color: "#16a34a", fontWeight: 700 }}>
-                    Coupon applied: {order.coupon_code} (-₹{Number(order.coupon_amount || 0).toLocaleString("en-IN")})
+                    Coupon applied: {order.coupon_code} (-₹{Number(order.coupon_amount || 0).toLocaleString("en-BD")})
                   </p>
                 </div>
               )}
               <div style={{ borderTop: `1px solid rgba(32,29,24,0.1)`, paddingTop: 14, marginTop: 4 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
-                  <span>Subtotal</span>
-                  {order.coupon_code ? (
-                    <span>
-                      <span style={{ textDecoration: "line-through", color: "#dc2626" }}>
-                        ₹{(Number(order.total_amount) + Number(order.coupon_amount || 0)).toLocaleString("en-IN")}
+                    <span>Subtotal</span>
+                    {campaignAdjusted ? (
+                      <span style={{ fontWeight: 900, color: COLORS.ink }}>
+                        ₹{Number(computedTotal).toLocaleString("en-BD")} (campaign price)
                       </span>
-                      {" → "}
-                      <span style={{ fontWeight: 700, color: COLORS.ink }}>
-                        ₹{Number(order.total_amount).toLocaleString("en-IN")}
-                      </span>
-                    </span>
-                  ) : (
-                    <span>₹{Number(order.total_amount).toLocaleString("en-IN")}</span>
-                  )}
-                </div>
+                    ) : (
+                      <span>₹{Number(order.total_amount).toLocaleString("en-BD")}</span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
+                      <span>Final</span>
+                      <span style={{ fontWeight: 900 }}>₹{Number(order.total_amount).toLocaleString("en-BD")}</span>
+                  </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                   <span>Shipping</span>
                   <span style={{ color: "#16a34a", fontWeight: 700 }}>FREE</span>
@@ -398,7 +409,7 @@ export default function OrderDetailsPage() {
                 {order.coupon_code && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
                     <span>Coupon savings ({order.coupon_code})</span>
-                    <span>-₹{Number(order.coupon_amount || 0).toLocaleString("en-IN")}</span>
+                    <span>-₹{Number(order.coupon_amount || 0).toLocaleString("en-BD")}</span>
                   </div>
                 )}
               </div>
@@ -443,3 +454,4 @@ export default function OrderDetailsPage() {
     </div>
   );
 }
+
