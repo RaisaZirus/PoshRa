@@ -803,6 +803,29 @@ router.patch("/returns/:return_id", async (req, res) => {
         [ret.quantity, ret.variant_id]
       );
 
+      // Calculate refund amount accounting for coupon discounts
+      let refundAmount = Number(ret.price) * ret.quantity;
+      
+      // Check if order had a coupon applied
+      const { rows: couponRows } = await client.query(
+        `SELECT oc.applied_amount, o.total_amount 
+         FROM order_coupons oc 
+         JOIN orders o ON o.order_id = oc.order_id 
+         WHERE oc.order_id = $1`,
+        [ret.order_id]
+      );
+      
+      if (couponRows.length > 0) {
+        const couponDiscount = Number(couponRows[0].applied_amount);
+        const orderTotal = Number(couponRows[0].total_amount);
+        const originalTotal = orderTotal + couponDiscount;
+        
+        // Calculate proportional discount for this item
+        const discountRatio = couponDiscount / originalTotal;
+        const itemDiscount = (Number(ret.price) * ret.quantity) * discountRatio;
+        refundAmount = refundAmount - itemDiscount;
+      }
+
       // Get payment information for refund
       const { rows: paymentRows } = await client.query(
         `SELECT payment_id FROM payments WHERE order_id = $1 LIMIT 1`,
@@ -811,7 +834,6 @@ router.patch("/returns/:return_id", async (req, res) => {
       
       if (paymentRows.length) {
         const paymentId = paymentRows[0].payment_id;
-        const refundAmount = Number(ret.price) * ret.quantity;
 
         // Create refund record
         await client.query(
@@ -821,7 +843,6 @@ router.patch("/returns/:return_id", async (req, res) => {
       }
 
       // Send refund notification to customer
-      const refundAmount = Number(ret.price) * ret.quantity;
       await client.query(
         `INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`,
         [ret.user_id, `Your refund of ₹${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed.`]

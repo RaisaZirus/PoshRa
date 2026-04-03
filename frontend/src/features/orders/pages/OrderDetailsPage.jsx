@@ -367,11 +367,40 @@ export default function OrderDetailsPage() {
               />
               <InfoRow label="Order status" value={<StatusBadge status={order.order_status} />} />
               <InfoRow label="Payment status" value={<StatusBadge status={order.payment_status} />} />
-              <div style={{ borderTop: `1px solid rgba(32,29,24,0.1)`, paddingTop: 14, marginTop: 4 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 900 }}>
-                  <span>Total</span>
-                  <span style={{ color: COLORS.primary }}>₹{Number(order.total_amount).toLocaleString("en-IN")}</span>
+              {order.coupon_code && (
+                <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(22,163,74,0.08)", borderRadius: 10 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "#16a34a", fontWeight: 700 }}>
+                    Coupon applied: {order.coupon_code} (-₹{Number(order.coupon_amount || 0).toLocaleString("en-IN")})
+                  </p>
                 </div>
+              )}
+              <div style={{ borderTop: `1px solid rgba(32,29,24,0.1)`, paddingTop: 14, marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
+                  <span>Subtotal</span>
+                  {order.coupon_code ? (
+                    <span>
+                      <span style={{ textDecoration: "line-through", color: "#dc2626" }}>
+                        ₹{(Number(order.total_amount) + Number(order.coupon_amount || 0)).toLocaleString("en-IN")}
+                      </span>
+                      {" → "}
+                      <span style={{ fontWeight: 700, color: COLORS.ink }}>
+                        ₹{Number(order.total_amount).toLocaleString("en-IN")}
+                      </span>
+                    </span>
+                  ) : (
+                    <span>₹{Number(order.total_amount).toLocaleString("en-IN")}</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
+                  <span>Shipping</span>
+                  <span style={{ color: "#16a34a", fontWeight: 700 }}>FREE</span>
+                </div>
+                {order.coupon_code && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
+                    <span>Coupon savings ({order.coupon_code})</span>
+                    <span>-₹{Number(order.coupon_amount || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                )}
               </div>
             </Card>
 

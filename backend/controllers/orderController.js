@@ -66,9 +66,21 @@ export const getMyOrders = async (req, res) => {
   const userId = req.user.userId;
   try {
     const { rows } = await pool.query(
-      `SELECT o.order_id, o.total_amount, o.order_status,
-              o.payment_status, o.created_at,
-              COUNT(oi.order_item_id)::int AS item_count
+      `SELECT o.order_id,
+              o.total_amount,
+              o.order_status,
+              o.payment_status,
+              o.created_at,
+              COUNT(oi.order_item_id)::int AS item_count,
+              (SELECT c.code
+               FROM order_coupons oc
+               JOIN coupons c ON c.coupon_id = oc.coupon_id
+               WHERE oc.order_id = o.order_id
+               LIMIT 1) AS coupon_code,
+              (SELECT oc.applied_amount
+               FROM order_coupons oc
+               WHERE oc.order_id = o.order_id
+               LIMIT 1) AS coupon_amount
        FROM orders o
        JOIN customers c         ON c.customer_id          = o.customer_id
        JOIN seller_orders so    ON so.order_id             = o.order_id
@@ -94,10 +106,13 @@ export const getOrderById = async (req, res) => {
   try {
     const { rows: orderRows } = await pool.query(
       `SELECT o.order_id, o.total_amount, o.order_status, o.payment_status,
-              o.created_at, a.city, a.area, a.details AS address_details
+              o.created_at, a.city, a.area, a.details AS address_details,
+              cp.code AS coupon_code, oc.applied_amount AS coupon_amount
        FROM orders o
        JOIN customers c         ON c.customer_id  = o.customer_id
        LEFT JOIN addresses a    ON a.address_id   = o.address_id
+       LEFT JOIN order_coupons oc ON oc.order_id = o.order_id
+       LEFT JOIN coupons cp     ON cp.coupon_id  = oc.coupon_id
        WHERE o.order_id = $1 AND c.user_id = $2`,
       [id, userId]
     );

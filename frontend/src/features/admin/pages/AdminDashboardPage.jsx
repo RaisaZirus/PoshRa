@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
   if (error) return <p style={{ color: "#dc2626", fontWeight: 700 }}>{error}</p>;
   if (!data) return null;
 
-  const { stats, kpis, traffic, finance } = data;
+  const { stats, kpis, traffic, finance, coupons } = data;
   const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
   const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-IN")}`;
 
@@ -107,7 +107,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Charts Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginBottom: 28 }}>
         <Card>
           <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>Orders (last 14 days)</p>
           <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Daily order volume</p>
@@ -127,6 +127,11 @@ export default function AdminDashboardPage() {
           <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>Commissions (last 14 days)</p>
           <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Platform earnings</p>
           <BarChart data={finance} valueKey="commission_total" labelKey="kpi_date" color="#4ade80" />
+        </Card>
+        <Card>
+          <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>Coupon Usage (last 14 days)</p>
+          <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Orders with coupons applied</p>
+          <BarChart data={coupons} valueKey="coupon_orders" labelKey="coupon_date" color="#a855f7" />
         </Card>
       </div>
 

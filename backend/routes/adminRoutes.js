@@ -88,6 +88,15 @@ router.get("/dashboard", async (req, res) => {
         `SELECT kpi_date, commission_total, payouts_requested, payouts_processed
          FROM finance_kpis_daily ORDER BY kpi_date DESC LIMIT 30`
       ),
+      pool.query(
+        `SELECT DATE(o.created_at) AS coupon_date, COUNT(*)::int AS coupon_orders,
+                SUM(oc.applied_amount)::numeric AS total_discount
+         FROM order_coupons oc
+         JOIN orders o ON o.order_id = oc.order_id
+         WHERE o.created_at >= NOW() - INTERVAL '14 days'
+         GROUP BY DATE(o.created_at)
+         ORDER BY coupon_date DESC`
+      ),
     ]);
 
     res.json({
@@ -105,11 +114,117 @@ router.get("/dashboard", async (req, res) => {
         kpis:    kpiRes.rows.reverse(),
         traffic: trafficRes.rows.reverse(),
         finance: financeRes.rows.reverse(),
+        coupons: couponRes.rows.reverse(),
       },
     });
   } catch (err) {
     console.error("admin dashboard error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/coupons ───────────────────────────────────────────────────
+router.get("/coupons", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT coupon_id, code, discount_type, discount_value, expiry_date
+       FROM coupons
+       ORDER BY expiry_date NULLS LAST, code`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("admin coupons list error:", err);
+    res.status(500).json({ success: false, message: "Failed to load coupons" });
+  }
+});
+
+// ── POST /api/admin/coupons ──────────────────────────────────────────────────
+router.post("/coupons", async (req, res) => {
+  const { code, discount_type, discount_value, expiry_date } = req.body;
+  if (!code?.trim()) {
+    return res.status(400).json({ success: false, message: "Coupon code is required" });
+  }
+  if (!["percentage", "fixed"].includes(discount_type)) {
+    return res.status(400).json({ success: false, message: "Discount type must be percentage or fixed" });
+  }
+  if (discount_value == null || Number(discount_value) < 0) {
+    return res.status(400).json({ success: false, message: "Discount value must be >= 0" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO coupons (code, discount_type, discount_value, expiry_date)
+       VALUES ($1, $2, $3, $4)
+       RETURNING coupon_id, code, discount_type, discount_value, expiry_date`,
+      [code.trim().toUpperCase(), discount_type, Number(discount_value), expiry_date || null]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error("create coupon error:", err);
+    if (err.code === "23505") {
+      return res.status(409).json({ success: false, message: "Coupon code already exists" });
+    }
+    res.status(500).json({ success: false, message: "Failed to create coupon" });
+  }
+});
+
+// ── PATCH /api/admin/coupons/:id ───────────────────────────────────────────────
+router.patch("/coupons/:id", async (req, res) => {
+  const { code, discount_type, discount_value, expiry_date } = req.body;
+  if (code != null && !code.trim()) {
+    return res.status(400).json({ success: false, message: "Coupon code cannot be empty" });
+  }
+  if (discount_type != null && !["percentage", "fixed"].includes(discount_type)) {
+    return res.status(400).json({ success: false, message: "Invalid discount type" });
+  }
+  if (discount_value != null && Number(discount_value) < 0) {
+    return res.status(400).json({ success: false, message: "Discount value must be >= 0" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE coupons SET
+         code          = COALESCE($1, code),
+         discount_type = COALESCE($2, discount_type),
+         discount_value= COALESCE($3, discount_value),
+         expiry_date   = COALESCE($4, expiry_date)
+       WHERE coupon_id = $5
+       RETURNING coupon_id, code, discount_type, discount_value, expiry_date`,
+      [
+        code ? code.trim().toUpperCase() : null,
+        discount_type || null,
+        discount_value != null ? Number(discount_value) : null,
+        expiry_date || null,
+        req.params.id,
+      ]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Coupon not found" });
+    }
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error("update coupon error:", err);
+    if (err.code === "23505") {
+      return res.status(409).json({ success: false, message: "Coupon code already exists" });
+    }
+    res.status(500).json({ success: false, message: "Failed to update coupon" });
+  }
+});
+
+// ── DELETE /api/admin/coupons/:id ────────────────────────────────────────────
+router.delete("/coupons/:id", async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM coupons WHERE coupon_id = $1`,
+      [req.params.id]
+    );
+    if (!rowCount) {
+      return res.status(404).json({ success: false, message: "Coupon not found" });
+    }
+    res.json({ success: true, message: "Coupon deleted" });
+  } catch (err) {
+    console.error("delete coupon error:", err);
+    res.status(500).json({ success: false, message: "Failed to delete coupon" });
   }
 });
 
