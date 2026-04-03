@@ -1,6 +1,7 @@
 import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth.jsx";
+import ReportModal from "../../../components/ReportModal.jsx";
 
 const COLORS = {
   bg: "#FDFDF9", soft: "#FBEF9C",
@@ -115,6 +116,7 @@ export default function StorePage() {
   const [error, setError] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [sort, setSort] = React.useState("newest");
+  const [showReportModal, setShowReportModal] = React.useState(false);
 
   React.useEffect(() => {
     fetch(`/api/stores/${store_slug}`)
@@ -232,9 +234,40 @@ export default function StorePage() {
                 </p>
               )}
             </div>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: 0 }}>
-              Member since {new Date(store.created_at).getFullYear()}
-            </p>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: 0 }}>
+                Member since {new Date(store.created_at).getFullYear()}
+              </p>
+              {user && (
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  style={{
+                    background: "none",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 8,
+                    padding: "5px 12px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,0.45)",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  🚩 Report seller
+                </button>
+              )}
+            </div>
+
+          {showReportModal && (
+            <ReportModal
+              entityType="seller"
+              entityId={store.seller_id}
+              entityLabel={store.store_name}
+              onClose={() => setShowReportModal(false)}
+            />
+          )}
           </div>
         </div>
       </div>

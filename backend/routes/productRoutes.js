@@ -53,6 +53,33 @@ router.post("/", createProduct);
 router.put("/:id", updateProduct);
 router.delete("/:id", deleteProduct);
 
+// ── POST /api/products/:id/view ───────────────────────────────────────────────
+// Records a product view. user_id and duration_seconds are optional.
+// Called by the frontend when a user visits a product details page.
+router.post("/:id/view", async (req, res) => {
+  try {
+    const productId = Number(req.params.id);
+    const { user_id = null, duration_seconds = null } = req.body;
+
+    // Silently skip if product doesn't exist (avoid 500 on stale IDs)
+    const { rows: exists } = await pool.query(
+      "SELECT 1 FROM products WHERE product_id = $1", [productId]
+    );
+    if (!exists.length) return res.status(404).json({ success: false, message: "Product not found" });
+
+    await pool.query(
+      `INSERT INTO view_logs (product_id, user_id, duration_seconds)
+       VALUES ($1, $2, $3)`,
+      [productId, user_id || null, duration_seconds || null]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("product view log error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 // ── GET /api/products/:id/reviews ────────────────────────────────────────────
 router.get("/:id/reviews", async (req, res) => {
   try {

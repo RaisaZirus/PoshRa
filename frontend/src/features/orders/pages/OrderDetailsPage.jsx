@@ -243,6 +243,25 @@ export default function OrderDetailsPage() {
                 {cancelling ? "Cancelling..." : "Cancel order"}
               </button>
             )}
+            {sellerOrders.some(so => so.status === "delivered") && (
+              (() => {
+                const deliveredItem = sellerOrders.find(so => so.status === "delivered")?.items?.[0];
+                if (deliveredItem?.order_item_id) {
+                  return (
+                    <Link to={`/returns/${deliveredItem.order_item_id}`}
+                      style={{
+                        fontSize: 13, fontWeight: 900, padding: "8px 20px",
+                        background: "#FEE2E2", color: "#991B1B",
+                        borderRadius: 10, textDecoration: "none",
+                        border: "1.5px solid #991B1B",
+                        display: "inline-block"
+                      }}>
+                      Return items
+                    </Link>
+                  );
+                }
+              })()
+            )}
             {payError && (
               <p style={{ fontSize: 13, color: "#dc2626", fontWeight: 700, margin: 0 }}>{payError}</p>
             )}

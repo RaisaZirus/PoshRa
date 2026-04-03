@@ -20,6 +20,8 @@ const NAV = [
   { to: "/admin/payouts",           label: "Payouts",           icon: "◑" },
   { to: "/admin/audit-logs",        label: "Audit Logs",        icon: "▦" },
   { to: "/admin/dashboard-builder", label: "KPI Builder",       icon: "◩" },
+  { to: "/admin/stores",            label: "Store Approvals",   icon: "🏪" },
+  { to: "/admin/product-views",     label: "Product Views",     icon: "👁" },
 ];
 
 export default function AdminLayout() {

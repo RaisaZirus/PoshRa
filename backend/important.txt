@@ -1,0 +1,23 @@
+turn off auto commit
+then commit manually
+
+//
+{querry.execute("begin"); // will not auto commit these
+---gives timestamp?
+querry.execute("commit);}
+querry.execute("rollback");"
+
+
+UPDATE users
+SET role = 'admin'
+WHERE email = 'meow@gmail.com';
+
+INSERT INTO admins (user_id)
+SELECT user_id
+FROM users
+WHERE email = 'meow@gmail.com';
+
+SELECT u.user_id, u.email, u.role, a.admin_id, a.access_level
+FROM users u
+LEFT JOIN admins a ON a.user_id = u.user_id
+WHERE u.email = 'meow@gmail.com';

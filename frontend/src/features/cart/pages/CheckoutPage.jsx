@@ -146,8 +146,8 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Success — go to order detail page
-      navigate(`/orders/${data.data.order_id}`, {
+      // Success — go to payment page
+      navigate(`/payment/${data.data.order_id}`, {
         state: { justPlaced: true, total: data.data.total_amount },
       });
     } catch (err) {

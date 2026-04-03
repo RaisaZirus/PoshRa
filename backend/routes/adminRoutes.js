@@ -43,6 +43,20 @@ async function logAudit(client, adminId, action, entityType = null, entityId = n
   );
 }
 
+async function updateFinanceKpis(client, { requested = 0, processed = 0 } = {}) {
+  // Use explicit transaction client if provided (for caller transaction) else pool directly
+  const q = client || pool;
+  await q.query(
+    `INSERT INTO finance_kpis_daily (kpi_date, payouts_requested, payouts_processed)
+     VALUES (CURRENT_DATE, $1, $2)
+     ON CONFLICT (kpi_date)
+     DO UPDATE SET
+       payouts_requested = finance_kpis_daily.payouts_requested + EXCLUDED.payouts_requested,
+       payouts_processed = finance_kpis_daily.payouts_processed + EXCLUDED.payouts_processed`,
+    [requested, processed]
+  );
+}
+
 // ── GET /api/admin/dashboard ──────────────────────────────────────────────────
 // Uses fn_platform_analytics function + site/traffic/finance KPI tables
 router.get("/dashboard", async (req, res) => {
@@ -658,9 +672,28 @@ router.patch("/payouts/:payout_id", async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid status" });
     }
 
-    await client.query(
-      "UPDATE payouts SET status = $1 WHERE payout_id = $2", [status, payout_id]
+    const { rows: existing } = await client.query(
+      "SELECT status, amount FROM payouts WHERE payout_id = $1",
+      [payout_id]
     );
+
+    if (!existing.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Payout not found" });
+    }
+
+    const oldStatus = existing[0].status;
+    const payoutAmount = Number(existing[0].amount || 0);
+
+    await client.query(
+      "UPDATE payouts SET status = $1 WHERE payout_id = $2",
+      [status, payout_id]
+    );
+
+    if (oldStatus !== status && status === "processed" && payoutAmount > 0) {
+      await updateFinanceKpis(client, { processed: payoutAmount });
+    }
+
     await logAudit(client, adminId, `Updated payout ${payout_id} to ${status}`, "payout", payout_id);
 
     await client.query("COMMIT");
@@ -674,4 +707,200 @@ router.patch("/payouts/:payout_id", async (req, res) => {
   }
 });
 
+// ── GET /api/admin/product-views ─────────────────────────────────────────────
+// Returns paginated view_logs with product + user info.
+// Supports filtering by product_id, date range.
+router.get("/product-views", async (req, res) => {
+  try {
+    const { product_id, from, to, page = 1, limit = 30 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const conditions = [];
+    const params = [];
+
+    if (product_id) {
+      params.push(Number(product_id));
+      conditions.push(`vl.product_id = $${params.length}`);
+    }
+    if (from) {
+      params.push(from);
+      conditions.push(`vl.created_at >= $${params.length}::timestamptz`);
+    }
+    if (to) {
+      params.push(to);
+      conditions.push(`vl.created_at <= $${params.length}::timestamptz`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM view_logs vl ${where}`, params
+    );
+
+    params.push(Number(limit), offset);
+    const { rows } = await pool.query(
+      `SELECT
+         vl.view_id,
+         vl.created_at,
+         vl.duration_seconds,
+         vl.product_id,
+         p.name  AS product_name,
+         vl.user_id,
+         u.name  AS user_name,
+         u.email AS user_email
+       FROM view_logs vl
+       LEFT JOIN products p ON p.product_id = vl.product_id
+       LEFT JOIN users    u ON u.user_id    = vl.user_id
+       ${where}
+       ORDER BY vl.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin product-views error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/product-views/summary ─────────────────────────────────────
+// Returns per-product view counts (most viewed first) for the last N days.
+router.get("/product-views/summary", async (req, res) => {
+  try {
+    const days = Math.min(Number(req.query.days) || 30, 365);
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+
+    const { rows } = await pool.query(
+      `SELECT
+         p.product_id,
+         p.name AS product_name,
+         COUNT(vl.view_id)::int                        AS total_views,
+         COUNT(DISTINCT vl.user_id)::int               AS unique_viewers,
+         ROUND(AVG(vl.duration_seconds))::int          AS avg_duration_seconds,
+         MAX(vl.created_at)                            AS last_viewed_at
+       FROM view_logs vl
+       JOIN products p ON p.product_id = vl.product_id
+       WHERE vl.created_at >= NOW() - ($1 || ' days')::interval
+       GROUP BY p.product_id, p.name
+       ORDER BY total_views DESC
+       LIMIT $2`,
+      [days, limit]
+    );
+
+    res.json({ success: true, data: rows, period_days: days });
+  } catch (err) {
+    console.error("admin product-views summary error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/stores ─────────────────────────────────────────────────────
+// List all stores with seller info; filterable by store_status.
+router.get("/stores", async (req, res) => {
+  try {
+    const { status, search, page = 1, limit = 20 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const conditions = [];
+    const params = [];
+
+    if (status) {
+      params.push(status);
+      conditions.push(`s.store_status = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(s.store_name ILIKE $${params.length} OR s.store_slug ILIKE $${params.length})`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM stores s ${where}`, params
+    );
+
+    params.push(Number(limit), offset);
+    const { rows } = await pool.query(
+      `SELECT
+         s.store_id, s.store_name, s.store_slug,
+         s.store_status, s.store_rating,
+         s.created_at, s.approved_at,
+         u.name  AS seller_name,
+         u.email AS seller_email,
+         sel.seller_id,
+         approver.name AS approved_by_name
+       FROM stores s
+       JOIN sellers sel ON sel.seller_id = s.seller_id
+       JOIN users   u   ON u.user_id     = sel.user_id
+       LEFT JOIN admins  adm ON adm.admin_id = s.approved_by
+       LEFT JOIN users   approver ON approver.user_id = adm.user_id
+       ${where}
+       ORDER BY s.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin stores error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/admin/stores/:store_id/status ──────────────────────────────────
+// Approve / suspend / reactivate a store.
+// Body: { status: "active" | "suspended" | "inactive" | "pending" }
+router.patch("/stores/:store_id/status", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { store_id } = req.params;
+    const { status } = req.body;
+
+    if (!["pending", "active", "inactive", "suspended"].includes(status)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    // When approving, stamp approved_at and approved_by
+    const approvalFields = status === "active"
+      ? ", approved_at = NOW(), approved_by = $3"
+      : "";
+    const queryParams = status === "active"
+      ? [status, store_id, adminId]
+      : [status, store_id];
+
+    await client.query(
+      `UPDATE stores
+       SET store_status = $1${approvalFields}
+       WHERE store_id = $2`,
+      queryParams
+    );
+
+    await logAudit(
+      client, adminId,
+      `Set store ${store_id} status to ${status}`,
+      "store", store_id
+    );
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: `Store status updated to ${status}` });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin store status error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;
+

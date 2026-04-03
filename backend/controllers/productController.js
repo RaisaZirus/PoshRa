@@ -334,7 +334,7 @@ export const searchProducts = async (req, res) => {
   try {
     const {
       q, category_id, store_id, min_price, max_price,
-      in_stock, sort, page = 1, limit = 20,
+      in_stock, sort, page = 1, limit = 20, user_id,
     } = req.query;
 
     const params = [];
@@ -370,18 +370,21 @@ export const searchProducts = async (req, res) => {
     const offset = (Number(page) - 1) * Number(limit);
 
     let orderSQL = "ORDER BY p.created_at DESC";
-    if (sort === "price_asc")  orderSQL = "ORDER BY price ASC NULLS LAST";
-    if (sort === "price_desc") orderSQL = "ORDER BY price DESC NULLS LAST";
-    if (sort === "newest")     orderSQL = "ORDER BY p.created_at DESC";
+    if (sort === "price_asc")    orderSQL = "ORDER BY price ASC NULLS LAST";
+    if (sort === "price_desc")   orderSQL = "ORDER BY price DESC NULLS LAST";
+    if (sort === "newest")       orderSQL = "ORDER BY p.created_at DESC";
+    if (sort === "most_viewed")  orderSQL = "ORDER BY view_count DESC NULLS LAST";
 
     const dataQuery = `
       SELECT p.product_id AS id, p.*,
              MIN(v.price) AS price, MAX(v.price) AS max_price,
              SUM(v.stock) AS total_stock,
-             MAX(pi.image_url) AS image
+             MAX(pi.image_url) AS image,
+             COUNT(DISTINCT vl.view_id)::int AS view_count
       FROM products p
       LEFT JOIN product_variants v  ON v.product_id  = p.product_id
       LEFT JOIN product_images pi   ON pi.product_id = p.product_id
+      LEFT JOIN view_logs vl        ON vl.product_id = p.product_id
       ${whereSQL}
       GROUP BY p.product_id
       ${orderSQL}
@@ -412,8 +415,8 @@ export const searchProducts = async (req, res) => {
       if (category_id) filters.categoryId = category_id;
       if (store_id) filters.storeId = store_id;
       await pool.query(
-        `INSERT INTO search_logs (query, filters, created_at) VALUES ($1, $2, NOW())`,
-        [q || null, Object.keys(filters).length ? filters : null]
+        `INSERT INTO search_logs (user_id, query, filters, created_at) VALUES ($1, $2, $3, NOW())`,
+        [user_id ? Number(user_id) : null, q || null, Object.keys(filters).length ? filters : null]
       );
     } catch (_) { /* ignore */ }
 

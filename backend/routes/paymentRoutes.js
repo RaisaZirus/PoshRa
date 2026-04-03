@@ -1,5 +1,6 @@
 import express from "express";
 import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
 import { pool } from "../db.js";
 
 const router = express.Router();
@@ -14,6 +15,10 @@ function authMiddleware(req, res, next) {
   } catch {
     return res.status(401).json({ success: false, message: "Invalid token" });
   }
+}
+
+function generateTransactionId() {
+  return `TXN-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
 // ── POST /api/payments/initiate ───────────────────────────────────────────────
@@ -49,29 +54,30 @@ router.post("/initiate", authMiddleware, async (req, res) => {
 
     // Check if a pending payment already exists
     const { rows: existing } = await pool.query(
-      `SELECT payment_id FROM payments WHERE order_id = $1 AND status = 'pending'`,
+      `SELECT payment_id, transaction_id FROM payments WHERE order_id = $1 AND status = 'pending'`,
       [order_id]
     );
     if (existing.length) {
       return res.json({
         success: true,
         message: "Pending payment already exists",
-        data: { payment_id: existing[0].payment_id, amount: order.total_amount },
+        data: { payment_id: existing[0].payment_id, amount: order.total_amount, transaction_id: existing[0].transaction_id, status: "pending" },
       });
     }
 
-    // Create payment record
+    // Generate transaction ID and create payment record
+    const transactionId = generateTransactionId();
     const { rows } = await pool.query(
-      `INSERT INTO payments (order_id, method, amount, status)
-       VALUES ($1, $2, $3, 'pending')
-       RETURNING payment_id, amount, status`,
-      [order_id, method, order.total_amount]
+      `INSERT INTO payments (order_id, method, transaction_id, amount, status)
+       VALUES ($1, $2, $3, $4, 'pending')
+       RETURNING payment_id, amount, status, transaction_id`,
+      [order_id, method, transactionId, order.total_amount]
     );
 
     return res.status(201).json({
       success: true,
       message: "Payment initiated",
-      data: { payment_id: rows[0].payment_id, amount: rows[0].amount },
+      data: { payment_id: rows[0].payment_id, amount: rows[0].amount, transaction_id: rows[0].transaction_id, status: rows[0].status },
     });
   } catch (err) {
     console.error("initiate payment error:", err);
@@ -119,9 +125,9 @@ router.post("/confirm", authMiddleware, async (req, res) => {
     // Mark payment as completed
     await client.query(
       `UPDATE payments
-       SET status = 'completed', transaction_id = $1
-       WHERE payment_id = $2`,
-      [transaction_id || `TXN-${Date.now()}`, payment_id]
+       SET status = 'completed'
+       WHERE payment_id = $1`,
+      [payment_id]
     );
 
     // Mark order as paid + move to processing
@@ -151,6 +157,12 @@ router.post("/confirm", authMiddleware, async (req, res) => {
 
     await client.query("COMMIT");
 
+    // Fetch the transaction_id from the payment record
+    const { rows: paymentData } = await client.query(
+      `SELECT transaction_id FROM payments WHERE payment_id = $1`,
+      [payment_id]
+    );
+
     return res.json({
       success: true,
       message: "Payment confirmed",
@@ -158,7 +170,7 @@ router.post("/confirm", authMiddleware, async (req, res) => {
         payment_id,
         order_id: payment.order_id,
         amount: payment.amount,
-        transaction_id: transaction_id || `TXN-${Date.now()}`,
+        transaction_id: paymentData[0]?.transaction_id,
       },
     });
   } catch (err) {

@@ -16,6 +16,7 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import sellerRoutes from "./routes/sellerRoutes.js";
 import storeRoutes from "./routes/storeRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";   // ← NEW
 import { pool } from "./db.js";
 import { aj } from "./lib/arcjet.js";
@@ -60,6 +61,7 @@ app.use("/api/categories",         categoryRoutes);
 app.use("/api/seller",             sellerRoutes);
 app.use("/api/stores",             storeRoutes);
 app.use("/api/wishlist",           wishlistRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/api/admin",              adminRoutes);     // ← NEW
 
 async function checkDBConnection() {
