@@ -1,0 +1,8 @@
+Select *
+from customers u join orders c on(u.customer_id = c.customer_id)
+join users u1 using(user_id)
+join seller_orders so using(order_id)
+join order_items oi using(seller_order_id)
+where u1.email = 'hati@gmail.com'
+order by so.created_at desc;
+

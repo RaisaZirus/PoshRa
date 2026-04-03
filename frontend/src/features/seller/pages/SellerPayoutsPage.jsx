@@ -22,6 +22,7 @@ export default function SellerPayoutsPage() {
   const { fetchWithAuth } = useAuth();
   const [payouts, setPayouts] = React.useState([]);
   const [balance, setBalance] = React.useState(0);
+  const [pending, setPending] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [amount, setAmount] = React.useState("");
   const [requesting, setRequesting] = React.useState(false);
@@ -32,6 +33,7 @@ export default function SellerPayoutsPage() {
       const data = await fetchWithAuth("/api/seller/payouts");
       setPayouts(data.data || []);
       setBalance(Number(data.available_balance || 0));
+      setPending(Number(data.pending_payout || 0));
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }, [fetchWithAuth]);
@@ -79,9 +81,9 @@ export default function SellerPayoutsPage() {
         {/* Quick stats */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <Card style={{ padding: 16 }}>
-            <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 4px", fontWeight: 700 }}>Total requested</p>
+            <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 4px", fontWeight: 700 }}>Pending payout requests</p>
             <p style={{ fontSize: 22, fontWeight: 900, color: COLORS.ink, margin: 0 }}>
-              ₹{payouts.reduce((s, p) => s + Number(p.amount), 0).toLocaleString("en-IN")}
+              ₹{pending.toLocaleString("en-IN")}
             </p>
           </Card>
           <Card style={{ padding: 16 }}>
