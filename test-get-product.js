@@ -78,3 +78,5 @@ req.on('error', (e) => {
 
 console.log(`📤 Fetching product details for ID ${prodId}...`);
 req.end();
+
+

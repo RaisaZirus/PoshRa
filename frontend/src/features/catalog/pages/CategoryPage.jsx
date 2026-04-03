@@ -56,11 +56,11 @@ function ProductCard({ p, onAddToCart }) {
           <p style={{ fontSize: 11, color: COLORS.olive, margin: "0 0 8px" }}>{p.brand || p.store_name}</p>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{ fontWeight: 900, fontSize: 15, color: COLORS.ink }}>
-              ₹{Number(price).toLocaleString("en-IN")}
+              ₹{Number(price).toLocaleString("en-BD")}
             </span>
             {hasDiscount && (
               <span style={{ fontSize: 12, color: "rgba(32,29,24,0.45)", textDecoration: "line-through" }}>
-                ₹{Number(p.min_price).toLocaleString("en-IN")}
+                ₹{Number(p.min_price).toLocaleString("en-BD")}
               </span>
             )}
           </div>
@@ -209,3 +209,4 @@ export default function CategoryPage() {
     </div>
   );
 }
+

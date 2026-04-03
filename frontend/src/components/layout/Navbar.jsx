@@ -15,41 +15,116 @@ export default function Navbar() {
   };
 
   return (
-    <header style={{ position: "sticky", top: 0, zIndex: 50, backdropFilter: "blur(10px)", background: "rgba(255,255,255,0.82)", boxShadow: "0 2px 20px rgba(15,23,42,0.08)", borderBottom: "1px solid #e2e8f0" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, padding: "10px 16px" }}>
-        <Link to="/" className="btn btn-secondary" style={{ padding: "6px 14px", textTransform: "uppercase", fontWeight: 800 }}>Shop</Link>
+    <header style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 100,
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(243,244,246,0.82))",
+      borderBottom: "1px solid rgba(148,163,184,0.3)",
+      boxShadow: "0 8px 14px rgba(15,23,42,0.08)",
+    }}>
+      <div style={{
+        maxWidth: 1300,
+        width: "100%",
+        margin: "0 auto",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "12px 20px",
+        gap: 12,
+      }}>
+        <Link to="/" style={{
+          textDecoration: "none",
+          fontSize: 20,
+          fontWeight: 900,
+          letterSpacing: 1,
+          color: "#1f2937",
+          marginLeft: 8,
+        }}>
+          Shop
+        </Link>
 
-        <form onSubmit={submitSearch} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 240, background: "#fff", borderRadius: 999, padding: "6px", border: "1px solid #cbd5e1", boxShadow: "inset 0 1px 2px rgba(15,23,42,0.08)" }}>
+        <form onSubmit={submitSearch} style={{
+          flex: 1,
+          minWidth: 280,
+          maxWidth: 520,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "#ffffff",
+          borderRadius: 999,
+          padding: "6px 8px",
+          border: "1px solid rgba(148,163,184,0.35)",
+          boxShadow: "inset 0 1px 2px rgba(15,23,42,0.06)",
+        }}>
           <input
-            className="input"
             type="text"
-            placeholder="Search products..."
+            placeholder="Search for products, stores, categories..."
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            style={{ border: "none", boxShadow: "none", padding: "8px 10px", borderRadius: "999px" }}
+            style={{
+              flex: 1,
+              border: "none",
+              outline: "none",
+              fontSize: 14,
+              padding: "10px 10px",
+              borderRadius: "999px",
+              color: "#1f2937",
+              background: "transparent",
+            }}
           />
-          <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", borderRadius: 999 }}>Go</button>
+          <button type="submit" style={{
+            border: "none",
+            background: "#fdd835",
+            color: "#1f2937",
+            fontWeight: 700,
+            padding: "9px 14px",
+            borderRadius: 999,
+            cursor: "pointer",
+            transition: "all .2s ease",
+            boxShadow: "0 4px 10px rgba(253,216,53,0.35)",
+          }}>
+            Search
+          </button>
         </form>
 
-        <Link to="/cart" className="btn btn-secondary">Cart</Link>
-
-        <div style={{ display: "flex", gap: 8 }}>
+        <nav style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <Link to="/cart" style={{ color: "#0f172a", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>Cart</Link>
           {!user ? (
             <>
-              <Link to="/auth/login" className="btn btn-secondary">Login</Link>
-              <Link to="/auth/register" className="btn btn-primary">Register</Link>
+              <Link to="/auth/login" style={{ color: "#374151", fontWeight: 600, fontSize: 14 }}>Login</Link>
+              <Link to="/auth/register" style={{
+                background: "#22c55e",
+                color: "#fff",
+                padding: "7px 14px",
+                borderRadius: 999,
+                fontWeight: 700,
+                textDecoration: "none",
+                fontSize: 14,
+              }}>Register</Link>
             </>
           ) : (
             <>
-              <Link to="/account/profile" className="btn btn-secondary">Account</Link>
-              <Link to="/orders" className="btn btn-secondary">Orders</Link>
-              {user.role === "seller" && <Link to="/seller" className="btn btn-secondary">Seller</Link>}
-              {user.role === "admin" && <Link to="/admin" className="btn btn-secondary">Admin</Link>}
-              <button onClick={logout} className="btn btn-secondary">Logout</button>
+              <Link to="/account/profile" style={{ color: "#374151", fontWeight: 600, fontSize: 14 }}>Profile</Link>
+              <Link to="/orders" style={{ color: "#374151", fontWeight: 600, fontSize: 14 }}>Orders</Link>
+              {user.role === "seller" && <Link to="/seller" style={{ color: "#374151", fontWeight: 600, fontSize: 14 }}>Seller</Link>}
+              {user.role === "admin" && <Link to="/admin" style={{ color: "#374151", fontWeight: 600, fontSize: 14 }}>Admin</Link>}
+              <button onClick={logout} style={{
+                background: "transparent",
+                border: "1px solid rgba(148,163,184,0.5)",
+                borderRadius: 999,
+                padding: "7px 14px",
+                color: "#0f172a",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}>Logout</button>
             </>
           )}
-        </div>
+        </nav>
       </div>
     </header>
   );
 }
+

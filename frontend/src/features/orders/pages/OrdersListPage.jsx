@@ -133,7 +133,7 @@ export default function OrdersListPage() {
                         Order #{order.order_id}
                       </p>
                       <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 10px" }}>
-                        {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                        {new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "long", year: "numeric" })}
                         {" · "}
                         {order.item_count} item{order.item_count != 1 ? "s" : ""}
                       </p>
@@ -151,11 +151,11 @@ export default function OrdersListPage() {
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <p style={{ fontWeight: 900, fontSize: 18, color: COLORS.primary, margin: "0 0 6px" }}>
-                        ₹{Number(order.total_amount).toLocaleString("en-IN")}
+                        ₹{Number(order.total_amount).toLocaleString("en-BD")}
                       </p>
                       {order.coupon_code && (
                         <p style={{ fontSize: 11, color: "#16a34a", margin: "2px 0 6px" }}>
-                          {order.coupon_code} applied → -₹{Number(order.coupon_amount || 0).toLocaleString("en-IN")}
+                          {order.coupon_code} applied → -₹{Number(order.coupon_amount || 0).toLocaleString("en-BD")}
                         </p>
                       )}
                       <p style={{ fontSize: 12, color: COLORS.olive, margin: 0, fontWeight: 700 }}>
@@ -172,3 +172,4 @@ export default function OrdersListPage() {
     </div>
   );
 }
+

@@ -42,7 +42,12 @@ export default function SellerProductEditPage() {
       const p = prodData.data;
       setProduct(p);
       setForm({ name: p.name, description: p.description || "", brand: p.brand || "", status: p.status, category_id: p.category_id || "" });
-      setVariants(p.variants.map((v) => ({ ...v, discount_price: v.discount_price || "" })));
+      setVariants(p.variants.map((v) => {
+        const price = parseFloat(v.price);
+        const discountPrice = v.discount_price ? parseFloat(v.discount_price) : 0;
+        const discountPercentage = discountPrice > 0 ? Math.round(((price - discountPrice) / price) * 100) : "";
+        return { ...v, discount_percentage: discountPercentage.toString() };
+      }));
       setCategories(Array.isArray(catData) ? catData : []);
     }).catch((e) => setError(e.message))
     .finally(() => setLoading(false));
@@ -60,16 +65,19 @@ export default function SellerProductEditPage() {
         body: JSON.stringify({ ...form, category_id: form.category_id ? Number(form.category_id) : null }),
       });
       // Update each variant stock/price
-      await Promise.all(variants.map((v) =>
-        fetchWithAuth(`/api/seller/inventory/${v.variant_id}`, {
+      await Promise.all(variants.map((v) => {
+        const price = parseFloat(v.price);
+        const discountPercentage = v.discount_percentage ? parseFloat(v.discount_percentage) : 0;
+        const discountPrice = discountPercentage > 0 ? price * (1 - discountPercentage / 100) : null;
+        return fetchWithAuth(`/api/seller/inventory/${v.variant_id}`, {
           method: "PATCH",
           body: JSON.stringify({
             stock: Number(v.stock),
-            price: parseFloat(v.price),
-            discount_price: v.discount_price ? parseFloat(v.discount_price) : null,
+            price: price,
+            discount_price: discountPrice,
           }),
-        })
-      ));
+        });
+      }));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) { setError(err.message); }
@@ -140,12 +148,12 @@ export default function SellerProductEditPage() {
                 <Input value={v.sku} disabled style={{ background: COLORS.soft, color: COLORS.olive }} />
               </div>
               <div>
-                {i === 0 && <Label>Price ₹</Label>}
+                {i === 0 && <Label>Price ৳</Label>}
                 <Input type="number" value={v.price} onChange={(e) => setVariant(i, "price", e.target.value)} />
               </div>
               <div>
-                {i === 0 && <Label>Discount ₹</Label>}
-                <Input type="number" value={v.discount_price} onChange={(e) => setVariant(i, "discount_price", e.target.value)} placeholder="—" />
+                {i === 0 && <Label>Discount %</Label>}
+                <Input type="number" value={v.discount_percentage} onChange={(e) => setVariant(i, "discount_percentage", e.target.value)} placeholder="10" />
               </div>
               <div>
                 {i === 0 && <Label>Stock</Label>}
@@ -169,3 +177,4 @@ export default function SellerProductEditPage() {
     </div>
   );
 }
+

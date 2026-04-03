@@ -130,7 +130,7 @@ export default function SellerDashboardPage() {
     { label: "Total orders", value: stats.total_orders, link: "/seller/orders" },
     { label: "Pending orders", value: stats.pending_orders, link: "/seller/orders?status=pending" },
     { label: "Active products", value: stats.active_products, link: "/seller/products" },
-    { label: "Revenue (delivered)", value: `₹${Number(stats.total_revenue).toLocaleString("en-IN")}`, link: "/seller/payouts" },
+    { label: "Revenue (delivered)", value: `৳${Number(stats.total_revenue).toLocaleString("en-BD")}`, link: "/seller/payouts" },
   ];
 
   return (
@@ -189,10 +189,10 @@ export default function SellerDashboardPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: COLORS.soft, borderRadius: 12 }}>
                   <div>
                     <p style={{ fontWeight: 800, fontSize: 13, color: COLORS.ink, margin: "0 0 3px" }}>Order #{o.order_id}</p>
-                    <p style={{ fontSize: 11, color: COLORS.olive, margin: 0 }}>{o.item_count} item{o.item_count !== 1 ? "s" : ""} · {new Date(o.created_at).toLocaleDateString("en-IN")}</p>
+                    <p style={{ fontSize: 11, color: COLORS.olive, margin: 0 }}>{o.item_count} item{o.item_count !== 1 ? "s" : ""} · {new Date(o.created_at).toLocaleDateString("en-BD")}</p>
                   </div>
                   <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    <p style={{ fontWeight: 900, fontSize: 14, color: COLORS.ink, margin: 0 }}>₹{Number(o.subtotal).toLocaleString("en-IN")}</p>
+                    <p style={{ fontWeight: 900, fontSize: 14, color: COLORS.ink, margin: 0 }}>৳{Number(o.subtotal).toLocaleString("en-BD")}</p>
                     <StatusBadge status={o.status} />
                   </div>
                 </div>
@@ -204,3 +204,4 @@ export default function SellerDashboardPage() {
     </div>
   );
 }
+

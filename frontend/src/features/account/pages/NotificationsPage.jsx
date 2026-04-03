@@ -142,7 +142,7 @@ export default function NotificationsPage() {
                   {n.message || "You have a new notification"}
                 </p>
                 <p style={{ margin: 0, fontSize: 12, color: COLORS.olive }}>
-                  {new Date(n.created_at).toLocaleDateString("en-IN", {
+                  {new Date(n.created_at).toLocaleDateString("en-BD", {
                     day: "numeric", month: "short", year: "numeric",
                     hour: "2-digit", minute: "2-digit",
                   })}
@@ -161,3 +161,4 @@ export default function NotificationsPage() {
     </div>
   );
 }
+

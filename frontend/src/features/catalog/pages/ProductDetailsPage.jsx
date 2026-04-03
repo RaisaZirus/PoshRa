@@ -304,12 +304,12 @@ export default function ProductDetailsPage() {
               >
                 <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
                   <div style={{ fontSize: 36, fontWeight: 900, color: COLORS.primary }}>
-                    ₹{displayPrice?.toFixed(0) || "0"}
+                    ৳{displayPrice?.toFixed(0) || "0"}
                   </div>
                   {selectedVariant?.discount_price && (
                     <>
                       <div style={{ fontSize: 18, color: "rgba(32,29,24,0.5)", textDecoration: "line-through" }}>
-                        ₹{selectedVariant.price?.toFixed(0) || "0"}
+                        ৳{selectedVariant.price?.toFixed(0) || "0"}
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: "#dc2626", background: COLORS.soft, padding: "4px 8px", borderRadius: 6 }}
                       >
@@ -321,7 +321,7 @@ export default function ProductDetailsPage() {
                 {selectedVariant?.discount_price && (
                   <p style={{ fontSize: 13, color: "#16a34a", fontWeight: 700, marginTop: 8 }}
                   >
-                    Save ₹{(selectedVariant.price - selectedVariant.discount_price).toLocaleString('en-IN')}
+                    Save ৳{(selectedVariant.price - selectedVariant.discount_price).toLocaleString('en-BD')}
                   </p>
                 )}
               </div>
@@ -387,7 +387,7 @@ export default function ProductDetailsPage() {
                         }}
                       >
                         <span>{variant.sku}</span>
-                        <span>₹{variant.discount_price || variant.price}</span>
+                        <span>৳{variant.discount_price || variant.price}</span>
                       </button>
                     ))}
                   </div>
@@ -712,7 +712,7 @@ export default function ProductDetailsPage() {
                               </div>
                             </div>
                             <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>
-                              {new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              {new Date(r.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}
                             </p>
                           </div>
                           {r.comment && <p style={{ fontSize: 13, color: COLORS.ink, margin: 0, lineHeight: 1.6 }}>{r.comment}</p>}
@@ -770,12 +770,12 @@ export default function ProductDetailsPage() {
                         <div key={q.question_id} style={{ borderLeft: `3px solid ${COLORS.primary}`, paddingLeft: 14 }}>
                           <p style={{ fontWeight: 800, fontSize: 14, color: COLORS.ink, margin: "0 0 4px" }}>{q.question}</p>
                           <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 8px" }}>
-                            {q.customer_name} · {new Date(q.created_at).toLocaleDateString("en-IN")}
+                            {q.customer_name} · {new Date(q.created_at).toLocaleDateString("en-BD")}
                           </p>
                           {q.answer ? (
                             <div style={{ background: "#FBEF9C", borderRadius: 8, padding: "10px 12px" }}>
                               <p style={{ fontSize: 12, fontWeight: 800, color: COLORS.olive, margin: "0 0 4px" }}>
-                                Seller answer · {new Date(q.answered_at).toLocaleDateString("en-IN")}
+                                Seller answer · {new Date(q.answered_at).toLocaleDateString("en-BD")}
                               </p>
                               <p style={{ fontSize: 13, color: COLORS.ink, margin: 0 }}>{q.answer}</p>
                             </div>
@@ -795,7 +795,7 @@ export default function ProductDetailsPage() {
         {/* Info Pills */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" style={{ marginTop: 40, marginBottom: 40 }}>
           {[
-            { icon: "🚚", title: "Free Shipping", text: "On orders above ₹499" },
+            { icon: "🚚", title: "Free Shipping", text: "On orders above ৳499" },
             { icon: "🔁", title: "Easy Returns", text: "30-day return policy" },
             { icon: "🔒", title: "Secure Payment", text: "100% secure checkout" },
           ].map((item) => (
@@ -814,3 +814,4 @@ export default function ProductDetailsPage() {
     </div>
   );
 } 
+

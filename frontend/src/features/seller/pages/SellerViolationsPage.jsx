@@ -61,7 +61,7 @@ export default function SellerViolationsPage() {
                   )}
                 </div>
                 <p style={{ fontSize: 12, color: COLORS.olive, fontWeight: 700, margin: 0, flexShrink: 0 }}>
-                  {new Date(v.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  {new Date(v.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}
                 </p>
               </div>
             </Card>
@@ -71,3 +71,4 @@ export default function SellerViolationsPage() {
     </div>
   );
 }
+

@@ -124,7 +124,7 @@ export default function ReturnRequestPage() {
               <div style={{ background: COLORS.soft, borderRadius: 10, padding: "12px 14px", marginBottom: 20 }}>
                 <p style={{ fontWeight: 800, fontSize: 14, color: COLORS.ink, margin: "0 0 2px" }}>{itemInfo.product_name}</p>
                 <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>
-                  SKU: {itemInfo.sku} · Qty: {itemInfo.quantity} · ₹{(Number(itemInfo.price) * itemInfo.quantity).toLocaleString("en-IN")}
+                  SKU: {itemInfo.sku} · Qty: {itemInfo.quantity} · ₹{(Number(itemInfo.price) * itemInfo.quantity).toLocaleString("en-BD")}
                 </p>
               </div>
             )}
@@ -209,3 +209,4 @@ export default function ReturnRequestPage() {
     </div>
   );
 }
+

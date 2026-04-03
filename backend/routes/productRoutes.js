@@ -1,4 +1,5 @@
 import express from "express";
+import jwt from "jsonwebtoken";
 import {
   createProduct,
   deleteProduct,
@@ -26,16 +27,16 @@ router.get("/featured", async (req, res) => {
         p.product_id,
         p.name,
         p.brand,
-        MIN(pv.price)                                         AS min_price,
-        MIN(pv.discount_price)                                AS discount_price,
-        COALESCE(SUM(pv.stock), 0)                            AS stock,
-        MAX(CASE WHEN pi.is_primary THEN pi.image_url END)    AS image_url,
+        MIN(pv.price) AS min_price,
+        MIN(pv.discount_price) AS discount_price,
+        COALESCE(SUM(pv.stock), 0) AS stock,
+        MAX(CASE WHEN pi.is_primary THEN pi.image_url END) AS image_url,
         COALESCE((SELECT SUM(oi.quantity) FROM order_items oi
                   JOIN product_variants pv2 ON pv2.variant_id = oi.variant_id
                   WHERE pv2.product_id = p.product_id), 0)::int AS total_sold
       FROM products p
       LEFT JOIN product_variants pv ON pv.product_id = p.product_id
-      LEFT JOIN product_images   pi ON pi.product_id = p.product_id
+      LEFT JOIN product_images pi ON pi.product_id = p.product_id
       WHERE p.status = 'active'
       GROUP BY p.product_id
       ORDER BY p.created_at DESC
@@ -209,7 +210,6 @@ router.get("/:id/questions", async (req, res) => {
 
 // ── POST /api/products/:id/questions ──────────────────────────────────────────
 // Requires auth — only customers can ask
-import jwt from "jsonwebtoken";
 router.post("/:id/questions", async (req, res) => {
   const auth = req.headers.authorization || "";
   const m = auth.match(/^Bearer\s+(.*)$/i);
@@ -240,3 +240,4 @@ router.post("/:id/questions", async (req, res) => {
 });
 
 export default router;
+

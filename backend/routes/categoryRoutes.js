@@ -49,10 +49,10 @@ router.get("/:slug/products", async (req, res) => {
     const { rows: products } = await pool.query(
       `SELECT
          p.product_id, p.name, p.brand, p.status,
-         MIN(pv.price)                                       AS min_price,
-         MIN(pv.discount_price)                              AS discount_price,
-         COALESCE(SUM(pv.stock), 0)                          AS stock,
-         MAX(CASE WHEN pi.is_primary THEN pi.image_url END)  AS image_url,
+         MIN(pv.price)                                         AS min_price,
+         MIN(pv.discount_price) AS discount_price,
+         COALESCE(SUM(pv.stock), 0)                            AS stock,
+         MAX(CASE WHEN pi.is_primary THEN pi.image_url END)    AS image_url,
          s.store_name
        FROM products p
        LEFT JOIN product_variants pv ON pv.product_id = p.product_id
@@ -83,3 +83,4 @@ router.get("/:slug/products", async (req, res) => {
 });
 
 export default router;
+

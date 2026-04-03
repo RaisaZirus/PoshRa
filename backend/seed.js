@@ -85,3 +85,5 @@ const insertProducts = async () => {
 };
 
 insertProducts();
+
+

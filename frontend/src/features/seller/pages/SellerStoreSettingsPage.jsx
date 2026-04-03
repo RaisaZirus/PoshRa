@@ -23,9 +23,22 @@ export default function SellerStoreSettingsPage() {
   React.useEffect(() => {
     fetchWithAuth("/api/seller/stores")
       .then((d) => setStores(d.data || []))
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setError(err.message || "Failed to load stores");
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  const deleteStore = async (storeId) => {
+    if (!window.confirm("Are you sure you want to delete this store? This action cannot be undone.")) return;
+    try {
+      await fetchWithAuth(`/api/seller/stores/${storeId}`, { method: "DELETE" });
+      setStores((prev) => prev.filter((s) => s.store_id !== storeId));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const createStore = async (e) => {
     e.preventDefault();
@@ -47,6 +60,7 @@ export default function SellerStoreSettingsPage() {
   };
 
   if (loading) return <p style={{ color: COLORS.olive, fontWeight: 700 }}>Loading...</p>;
+  if (error) return <p style={{ color: "#dc2626", fontWeight: 700 }}>{error}</p>;
 
   return (
     <div>
@@ -111,10 +125,16 @@ export default function SellerStoreSettingsPage() {
                     <span style={{ fontSize: 12, color: COLORS.olive }}>⭐ {Number(s.store_rating).toFixed(1)}</span>
                   </div>
                 </div>
-                <a href={`/s/${s.store_slug}`} target="_blank" rel="noreferrer"
-                  style={{ padding: "8px 14px", background: COLORS.soft, color: COLORS.ink, fontWeight: 700, fontSize: 12, borderRadius: 8, textDecoration: "none" }}>
-                  View store →
-                </a>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <a href={`/s/${s.store_slug}`} target="_blank" rel="noreferrer"
+                    style={{ padding: "8px 14px", background: COLORS.soft, color: COLORS.ink, fontWeight: 700, fontSize: 12, borderRadius: 8, textDecoration: "none" }}>
+                    View store →
+                  </a>
+                  <button onClick={() => deleteStore(s.store_id)}
+                    style={{ padding: "8px 14px", background: "#FEE2E2", color: "#DC2626", fontWeight: 700, fontSize: 12, borderRadius: 8, border: "none", cursor: "pointer" }}>
+                    Delete
+                  </button>
+                </div>
               </div>
             </Card>
           ))}
@@ -123,3 +143,4 @@ export default function SellerStoreSettingsPage() {
     </div>
   );
 }
+

@@ -79,8 +79,8 @@ export default function AdminDashboardPage() {
   if (!data) return null;
 
   const { stats, kpis, traffic, finance, coupons } = data;
-  const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
-  const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-IN")}`;
+  const fmt = (n) => Number(n || 0).toLocaleString("en-BD");
+  const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-BD")}`;
 
   const STATS = [
     { label: "Total Users",      value: fmt(stats.total_users),    link: "/admin/users",       accent: C.primary },
@@ -160,3 +160,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+

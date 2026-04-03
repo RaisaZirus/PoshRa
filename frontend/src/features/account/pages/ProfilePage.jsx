@@ -88,7 +88,7 @@ export default function ProfilePage() {
   if (!profile) return <div style={{ color: "#dc2626", fontWeight: 700 }}>Failed to load profile.</div>;
 
   const initials = profile.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-  const memberSince = new Date(profile.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const memberSince = new Date(profile.created_at).toLocaleDateString("en-BD", { month: "long", year: "numeric" });
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif" }}>
@@ -199,3 +199,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

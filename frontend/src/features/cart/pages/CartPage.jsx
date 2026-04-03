@@ -216,11 +216,11 @@ export default function CartPage() {
                       {/* Price and Actions */}
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 16, fontWeight: 900, color: COLORS.primary, marginBottom: 8 }}>
-                          ₹{(price * item.quantity).toLocaleString("en-IN")}
+                          ৳{(price * item.quantity).toLocaleString("en-BD")}
                         </div>
                         {discount > 0 && (
                           <p style={{ fontSize: 12, color: "rgba(32,29,24,0.6)", textDecoration: "line-through", marginBottom: 8 }}>
-                            ₹{(originalPrice * item.quantity).toLocaleString("en-IN")}
+                            ৳{(originalPrice * item.quantity).toLocaleString("en-BD")}
                           </p>
                         )}
 
@@ -332,7 +332,7 @@ export default function CartPage() {
                     return (
                       <div key={item.cart_item_id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: COLORS.olive, marginBottom: 8 }}>
                         <span>{item.product_name} x {item.quantity}</span>
-                        <span>₹{(price * item.quantity).toLocaleString("en-IN")}</span>
+                        <span>৳{(price * item.quantity).toLocaleString("en-BD")}</span>
                       </div>
                     );
                   })}
@@ -342,7 +342,7 @@ export default function CartPage() {
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                     <span>Subtotal</span>
-                    <span>₹{cart.total.toLocaleString("en-IN")}</span>
+                    <span>৳{cart.total.toLocaleString("en-BD")}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                     <span>Shipping</span>
@@ -350,7 +350,7 @@ export default function CartPage() {
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive }}>
                     <span>Tax (0%)</span>
-                    <span>₹0</span>
+                    <span>৳0</span>
                   </div>
                 </div>
 
@@ -368,7 +368,7 @@ export default function CartPage() {
                   }}
                 >
                   <span>TOTAL</span>
-                  <span style={{ color: COLORS.primary }}>₹{cart.total.toLocaleString("en-IN")}</span>
+                  <span style={{ color: COLORS.primary }}>৳{cart.total.toLocaleString("en-BD")}</span>
                 </div>
 
                 {/* Checkout Buttons */}
@@ -412,7 +412,7 @@ export default function CartPage() {
                 {/* Info Pills */}
                 <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid rgba(32,29,24,0.12)`, fontSize: 12, color: COLORS.olive, lineHeight: 1.6 }}>
                   <p style={{ marginBottom: 12 }}>
-                    <strong>✓ Free delivery</strong> on orders above ₹499
+                    <strong>✓ Free delivery</strong> on orders above ৳499
                   </p>
                   <p style={{ marginBottom: 12 }}>
                     <strong>✓ Easy returns</strong> within 30 days
@@ -429,3 +429,4 @@ export default function CartPage() {
     </div>
   );
 }
+

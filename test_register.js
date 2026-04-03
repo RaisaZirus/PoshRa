@@ -13,3 +13,4 @@ fetch('http://localhost:5174/api/auth/register', {
 .then(response => response.json())
 .then(data => console.log('Success:', data))
 .catch(error => console.error('Error:', error));
+

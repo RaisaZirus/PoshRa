@@ -61,7 +61,7 @@ export default function SellerPayoutsPage() {
         {/* Balance + request */}
         <Card>
           <p style={{ fontSize: 12, fontWeight: 900, color: COLORS.olive, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: 0.5 }}>Available balance</p>
-          <p style={{ fontSize: 36, fontWeight: 900, color: COLORS.ink, margin: "0 0 20px" }}>₹{balance.toLocaleString("en-IN")}</p>
+          <p style={{ fontSize: 36, fontWeight: 900, color: COLORS.ink, margin: "0 0 20px" }}>৳{balance.toLocaleString("en-BD")}</p>
           <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 16px" }}>Balance is calculated from delivered orders.</p>
 
           <form onSubmit={requestPayout} style={{ display: "flex", gap: 10 }}>
@@ -83,13 +83,13 @@ export default function SellerPayoutsPage() {
           <Card style={{ padding: 16 }}>
             <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 4px", fontWeight: 700 }}>Pending payout requests</p>
             <p style={{ fontSize: 22, fontWeight: 900, color: COLORS.ink, margin: 0 }}>
-              ₹{pending.toLocaleString("en-IN")}
+              ৳{pending.toLocaleString("en-BD")}
             </p>
           </Card>
           <Card style={{ padding: 16 }}>
             <p style={{ fontSize: 12, color: COLORS.olive, margin: "0 0 4px", fontWeight: 700 }}>Processed</p>
             <p style={{ fontSize: 22, fontWeight: 900, color: "#166534", margin: 0 }}>
-              ₹{payouts.filter((p) => p.status === "processed").reduce((s, p) => s + Number(p.amount), 0).toLocaleString("en-IN")}
+              ৳{payouts.filter((p) => p.status === "processed").reduce((s, p) => s + Number(p.amount), 0).toLocaleString("en-BD")}
             </p>
           </Card>
         </div>
@@ -107,8 +107,8 @@ export default function SellerPayoutsPage() {
             {payouts.map((p) => (
               <div key={p.payout_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: COLORS.soft, borderRadius: 10 }}>
                 <div>
-                  <p style={{ fontWeight: 800, fontSize: 14, color: COLORS.ink, margin: "0 0 3px" }}>₹{Number(p.amount).toLocaleString("en-IN")}</p>
-                  <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>{new Date(p.requested_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  <p style={{ fontWeight: 800, fontSize: 14, color: COLORS.ink, margin: "0 0 3px" }}>৳{Number(p.amount).toLocaleString("en-BD")}</p>
+                  <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>{new Date(p.requested_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}</p>
                 </div>
                 <StatusBadge status={p.status} />
               </div>
@@ -119,3 +119,4 @@ export default function SellerPayoutsPage() {
     </div>
   );
 }
+

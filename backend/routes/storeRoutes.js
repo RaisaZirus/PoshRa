@@ -32,7 +32,7 @@ router.get("/:slug", async (req, res) => {
       `SELECT
          p.product_id, p.name, p.brand, p.status, p.created_at,
          MIN(pv.price)                                        AS min_price,
-         MIN(pv.discount_price)                               AS discount_price,
+         MIN(pv.discount_price) AS discount_price,
          COALESCE((SELECT SUM(stock) FROM product_variants WHERE product_id = p.product_id), 0)::int AS stock,
          MAX(CASE WHEN pi.is_primary THEN pi.image_url END)   AS image_url,
          COALESCE(AVG(r.rating), 0)::numeric(3,1)             AS avg_rating,
@@ -78,3 +78,4 @@ router.get("/", async (req, res) => {
 });
 
 export default router;
+

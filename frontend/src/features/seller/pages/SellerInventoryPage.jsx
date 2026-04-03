@@ -96,7 +96,7 @@ export default function SellerInventoryPage() {
                       <input type="number" value={editForm.price} onChange={(e) => setEditForm((f) => ({ ...f, price: e.target.value }))}
                         style={{ width: 80, padding: "6px 8px", borderRadius: 8, border: `1px solid rgba(32,29,24,0.2)`, fontSize: 13 }} />
                     ) : (
-                      <span style={{ fontWeight: 700, fontSize: 13 }}>₹{Number(item.price).toLocaleString("en-IN")}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>৳{Number(item.price).toLocaleString("en-BD")}</span>
                     )}
                   </td>
                   <td style={{ padding: "12px 16px" }}>
@@ -105,7 +105,7 @@ export default function SellerInventoryPage() {
                         placeholder="—" style={{ width: 80, padding: "6px 8px", borderRadius: 8, border: `1px solid rgba(32,29,24,0.2)`, fontSize: 13 }} />
                     ) : (
                       <span style={{ fontSize: 13, color: item.discount_price ? "#16a34a" : COLORS.olive }}>
-                        {item.discount_price ? `₹${Number(item.discount_price).toLocaleString("en-IN")}` : "—"}
+                        {item.discount_price ? `৳${Number(item.discount_price).toLocaleString("en-BD")}` : "—"}
                       </span>
                     )}
                   </td>
@@ -153,3 +153,4 @@ export default function SellerInventoryPage() {
     </div>
   );
 }
+

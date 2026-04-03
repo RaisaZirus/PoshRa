@@ -37,7 +37,7 @@ export default function SellerShipmentsPage() {
       <h1 style={{ fontSize: 26, fontWeight: 900, color: COLORS.ink, margin: "0 0 20px" }}>Shipments</h1>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        {["all", "pending", "shipped", "in_transit", "delivered", "returned"].map((s) => (
+        {["all"].map((s) => (
           <button key={s} onClick={() => setFilter(s)}
             style={{ padding: "7px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 800,
               background: filter === s ? COLORS.ink : COLORS.bg, color: filter === s ? COLORS.primary : COLORS.olive,
@@ -81,16 +81,16 @@ export default function SellerShipmentsPage() {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <p style={{ fontWeight: 900, fontSize: 15, color: COLORS.ink, margin: "0 0 4px" }}>
-                    ₹{Number(s.subtotal).toLocaleString("en-IN")}
+                    ৳{Number(s.subtotal).toLocaleString("en-BD")}
                   </p>
                   {s.shipped_at && (
                     <p style={{ fontSize: 11, color: COLORS.olive, margin: "0 0 4px" }}>
-                      Shipped: {new Date(s.shipped_at).toLocaleDateString("en-IN")}
+                      Shipped: {new Date(s.shipped_at).toLocaleDateString("en-BD")}
                     </p>
                   )}
                   {s.delivered_at && (
                     <p style={{ fontSize: 11, color: "#166534", fontWeight: 700, margin: 0 }}>
-                      Delivered: {new Date(s.delivered_at).toLocaleDateString("en-IN")}
+                      Delivered: {new Date(s.delivered_at).toLocaleDateString("en-BD")}
                     </p>
                   )}
                   <Link to={`/seller/orders/${s.seller_order_id}`}
@@ -106,3 +106,4 @@ export default function SellerShipmentsPage() {
     </div>
   );
 }
+

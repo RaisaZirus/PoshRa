@@ -93,3 +93,5 @@ console.log('📤 Creating test product...');
 console.log('📋 Request body:', JSON.stringify(productData, null, 2));
 req.write(postData);
 req.end();
+
+

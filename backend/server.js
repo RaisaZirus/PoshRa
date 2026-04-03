@@ -66,6 +66,37 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/admin",              adminRoutes);
 
+// Public active campaign list used by HomePage
+app.get("/api/campaigns/active", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.campaign_id, c.name, c.start_time, c.end_time,
+              COALESCE(JSON_AGG(JSON_BUILD_OBJECT(
+                'variant_id', cp.variant_id,
+                'product_id', p.product_id,
+                'name', p.name,
+                'store_name', s.store_name,
+                'image_url', COALESCE(pi.image_url, ''),
+                'price', pv.price,
+                'discount_price', cp.discount_price
+              ) ORDER BY cp.variant_id) FILTER (WHERE cp.variant_id IS NOT NULL), '[]') AS highlights
+       FROM campaigns c
+       LEFT JOIN campaign_products cp ON cp.campaign_id = c.campaign_id
+       LEFT JOIN product_variants pv ON pv.variant_id = cp.variant_id
+       LEFT JOIN products p ON p.product_id = pv.product_id
+       LEFT JOIN stores s ON s.store_id = p.store_id
+       LEFT JOIN product_images pi ON pi.product_id = p.product_id AND pi.is_primary
+       WHERE NOW() BETWEEN c.start_time AND c.end_time
+       GROUP BY c.campaign_id
+       ORDER BY c.start_time`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("active campaigns error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 async function checkDBConnection() {
   const res = await pool.query("SELECT NOW() as now;");
   console.log("DB connected. Time:", res.rows[0].now);
@@ -91,3 +122,5 @@ startServer();
 
 process.on("SIGINT",  async () => { try { await pool.end(); } finally { process.exit(0); } });
 process.on("SIGTERM", async () => { try { await pool.end(); } finally { process.exit(0); } });
+
+

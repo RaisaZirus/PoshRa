@@ -381,11 +381,11 @@ export default function CheckoutPage() {
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
                         <p style={{ fontWeight: 900, fontSize: 14, color: COLORS.ink }}>
-                          ₹{(price * item.quantity).toLocaleString("en-IN")}
+                          ৳{(price * item.quantity).toLocaleString("en-BD")}
                         </p>
                         {item.discount_price && (
                           <p style={{ fontSize: 11, color: "rgba(32,29,24,0.45)", textDecoration: "line-through" }}>
-                            ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                            ৳{(item.price * item.quantity).toLocaleString("en-BD")}
                           </p>
                         )}
                       </div>
@@ -415,8 +415,8 @@ export default function CheckoutPage() {
                       <option value="">Select a coupon</option>
                       {availableCoupons.map((c) => (
                         <option key={c.coupon_id} value={c.code}>
-                          {c.code} • {c.discount_type === "percentage" ? `${c.discount_value}% off` : `₹${c.discount_value} off`}
-                          {c.expiry_date ? ` (valid until ${new Date(c.expiry_date).toLocaleDateString("en-IN")})` : ""}
+                          {c.code} • {c.discount_type === "percentage" ? `${c.discount_value}% off` : `৳${c.discount_value} off`}
+                          {c.expiry_date ? ` (valid until ${new Date(c.expiry_date).toLocaleDateString("en-BD")})` : ""}
                         </option>
                       ))}
                     </select>
@@ -481,7 +481,7 @@ export default function CheckoutPage() {
               <div style={{ borderBottom: `1px solid rgba(32,29,24,0.1)`, paddingBottom: 14, marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                   <span>Subtotal ({cart.itemCount} items)</span>
-                  <span>₹{total.toLocaleString("en-IN")}</span>
+                  <span>৳{total.toLocaleString("en-BD")}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                   <span>Shipping</span>
@@ -490,14 +490,14 @@ export default function CheckoutPage() {
                 {couponApplied && coupon && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
                     <span>Coupon ({coupon.code})</span>
-                    <span>-₹{discountAmount.toLocaleString("en-IN")}</span>
+                    <span>-৳{discountAmount.toLocaleString("en-BD")}</span>
                   </div>
                 )}
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 900, color: COLORS.ink, marginBottom: 20 }}>
                 <span>Total</span>
-                <span style={{ color: COLORS.primary }}>₹{payableTotal.toLocaleString("en-IN")}</span>
+                <span style={{ color: COLORS.primary }}>৳{payableTotal.toLocaleString("en-BD")}</span>
               </div>
 
               {/* Error message */}
@@ -540,7 +540,7 @@ export default function CheckoutPage() {
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid rgba(32,29,24,0.1)`, fontSize: 12, color: COLORS.olive, lineHeight: 1.8 }}>
                 <p>✓ Secure checkout</p>
                 <p>✓ Easy 30-day returns</p>
-                <p>✓ Free delivery above ₹499</p>
+                <p>✓ Free delivery above ৳499</p>
               </div>
             </Card>
           </div>
@@ -549,3 +549,4 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
