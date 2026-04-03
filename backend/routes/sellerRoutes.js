@@ -209,6 +209,20 @@ router.patch("/orders/:id/status", async (req, res) => {
       );
     }
 
+    // Notify customer when shipment status changes to shipped/delivered
+    if (status === "shipped" || status === "delivered") {
+      await client.query(
+        `INSERT INTO notifications (user_id, type, message)
+         SELECT u.user_id, 'order', $2
+         FROM seller_orders so
+         JOIN orders o ON o.order_id = so.order_id
+         JOIN customers c ON c.customer_id = o.customer_id
+         JOIN users u ON u.user_id = c.user_id
+         WHERE so.seller_order_id = $1`,
+        [req.params.id, `Your order #${rows[0].order_id} (sub-order #${req.params.id}) has been ${status}.`]
+      );
+    }
+
     await client.query("COMMIT");
     res.json({ success: true, message: `Order marked as ${status}` });
   } catch (err) {
@@ -269,6 +283,18 @@ router.post("/shipments", async (req, res) => {
     await client.query(
       `UPDATE seller_orders SET status = 'shipped' WHERE seller_order_id = $1`,
       [seller_order_id]
+    );
+
+    await client.query(
+      `INSERT INTO notifications (user_id, type, message)
+       SELECT u.user_id, 'order', $2
+       FROM seller_orders so
+       JOIN orders o ON o.order_id = so.order_id
+       JOIN customers c ON c.customer_id = o.customer_id
+       JOIN users u ON u.user_id = c.user_id
+       WHERE so.seller_order_id = $1`,
+      [seller_order_id,
+       `Your order #${soRows[0].order_id} (sub-order #${seller_order_id}) has been shipped.`]
     );
 
     await client.query("COMMIT");
@@ -762,6 +788,14 @@ router.patch("/returns/:return_id", async (req, res) => {
       [status, req.params.return_id]
     );
 
+    if (status === "approved") {
+      await client.query(
+        `INSERT INTO notifications (user_id, type, message)
+         VALUES ($1, 'return', $2)`,
+        [ret.user_id, `Your return request for "${ret.product_name}" has been approved.`]
+      );
+    }
+
     if (status === "completed") {
       // Restore stock — trg_prevent_negative_stock will fire but won't block here (adding)
       await client.query(
@@ -839,6 +873,21 @@ router.patch("/returns/:return_id", async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();
+  }
+});
+
+
+// ── GET /api/seller/couriers ───────────────────────────────────────────────────
+// List all available couriers
+router.get("/couriers", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT courier_id, name, contact_info FROM couriers ORDER BY name ASC`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("get couriers error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 

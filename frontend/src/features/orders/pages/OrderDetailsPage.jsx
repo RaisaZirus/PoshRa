@@ -329,6 +329,11 @@ export default function OrderDetailsPage() {
                         <span style={{ color: COLORS.ink, fontWeight: 700 }}>{shipment.courier_name || "Courier"}</span>
                         <StatusBadge status={shipment.status} />
                       </div>
+                      {shipment.courier_contact && (
+                        <p style={{ fontSize: 12, color: COLORS.olive, margin: "6px 0 0" }}>
+                          Contact: <strong>{shipment.courier_contact}</strong>
+                        </p>
+                      )}
                       {shipment.tracking_number && (
                         <p style={{ fontSize: 12, color: COLORS.olive, margin: "6px 0 0" }}>
                           Tracking: <strong>{shipment.tracking_number}</strong>

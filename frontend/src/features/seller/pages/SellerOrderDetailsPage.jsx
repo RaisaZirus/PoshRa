@@ -35,16 +35,19 @@ export default function SellerOrderDetailsPage() {
   const [showShipForm, setShowShipForm] = React.useState(false);
   const [returns, setReturns] = React.useState([]);
   const [shipForm, setShipForm] = React.useState({ courier_name: "" });
+  const [couriers, setCouriers] = React.useState([]);
   const [error, setError] = React.useState("");
 
   const load = React.useCallback(() => {
     Promise.all([
       fetchWithAuth(`/api/seller/orders/${seller_order_id}`),
       fetchWithAuth("/api/seller/returns"),
-    ]).then(([d, r]) => {
+      fetchWithAuth("/api/seller/couriers"),
+    ]).then(([d, r, c]) => {
       setData(d.data);
       // filter returns for this seller_order
       setReturns((r.data || []).filter((x) => x.seller_order_id === Number(seller_order_id)));
+      setCouriers(c.data || []);
     }).catch((e) => setError(e.message))
     .finally(() => setLoading(false));
   }, [seller_order_id]);
@@ -212,9 +215,14 @@ export default function SellerOrderDetailsPage() {
                     <span style={{ fontSize: 13, color: COLORS.olive }}>Tracking Number</span>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{order.tracking_number || "—"}</span>
                   </div>
-                  <input placeholder="Courier name (e.g. DHL)" value={shipForm.courier_name}
+                  <select value={shipForm.courier_name}
                     onChange={(e) => setShipForm((s) => ({ ...s, courier_name: e.target.value }))}
-                    style={{ padding: "9px 12px", borderRadius: 10, border: `1px solid rgba(32,29,24,0.2)`, fontSize: 13 }} />
+                    style={{ padding: "9px 12px", borderRadius: 10, border: `1px solid rgba(32,29,24,0.2)`, fontSize: 13, fontWeight: 600, color: COLORS.ink }}>
+                    <option value="">Select a courier</option>
+                    {couriers.map((c) => (
+                      <option key={c.courier_id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button type="submit" disabled={updating}
                       style={{ flex: 1, padding: "10px", background: COLORS.primary, color: COLORS.ink, fontWeight: 900, fontSize: 13, borderRadius: 10, border: "none", cursor: "pointer" }}>

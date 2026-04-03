@@ -22,6 +22,7 @@ const NAV = [
   { to: "/admin/dashboard-builder", label: "KPI Builder",       icon: "◩" },
   { to: "/admin/stores",            label: "Store Approvals",   icon: "🏪" },
   { to: "/admin/product-views",     label: "Product Views",     icon: "👁" },
+  { to: "/admin/couriers",          label: "Couriers",          icon: "📦" },
 ];
 
 export default function AdminLayout() {
