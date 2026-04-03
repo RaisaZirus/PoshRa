@@ -60,7 +60,10 @@ export default function CheckoutPage() {
   // Coupon state
   const [couponCode, setCouponCode] = React.useState("");
   const [couponApplied, setCouponApplied] = React.useState(false);
+  const [appliedCoupon, setAppliedCoupon] = React.useState(null);
   const [couponError, setCouponError] = React.useState("");
+  const [availableCoupons, setAvailableCoupons] = React.useState([]);
+  const [loadingCoupons, setLoadingCoupons] = React.useState(true);
 
   // Order placement
   const [placing, setPlacing] = React.useState(false);
@@ -108,6 +111,28 @@ export default function CheckoutPage() {
       }
     };
     if (accessToken) fetchAddresses();
+  }, [accessToken]);
+
+  // ── Fetch available coupons ──────────────────────────────────────────────
+  React.useEffect(() => {
+    const fetchCoupons = async () => {
+      try {
+        setLoadingCoupons(true);
+        const res = await fetch("/api/coupons", {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        });
+        const data = await res.json();
+        if (data.success) {
+          setAvailableCoupons(data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch coupons:", err);
+      } finally {
+        setLoadingCoupons(false);
+      }
+    };
+
+    fetchCoupons();
   }, [accessToken]);
 
   // ── Place order ─────────────────────────────────────────────────────────
@@ -161,16 +186,29 @@ export default function CheckoutPage() {
   // ── Apply coupon (client-side validation only — real check on submit) ───
   const handleApplyCoupon = () => {
     setCouponError("");
+
     if (!couponCode.trim()) {
       setCouponError("Enter a coupon code first.");
       return;
     }
+
+    const selected = availableCoupons.find((c) => c.code.toUpperCase() === couponCode.trim().toUpperCase());
+    if (!selected) {
+      setCouponError("Invalid or expired coupon code.");
+      setCouponApplied(false);
+      setAppliedCoupon(null);
+      return;
+    }
+
+    setCouponCode(selected.code);
     setCouponApplied(true);
+    setAppliedCoupon(selected);
   };
 
   const handleRemoveCoupon = () => {
     setCouponCode("");
     setCouponApplied(false);
+    setAppliedCoupon(null);
     setCouponError("");
   };
 
@@ -208,6 +246,13 @@ export default function CheckoutPage() {
   }
 
   const total = cart.total;
+  const coupon = couponApplied ? appliedCoupon || availableCoupons.find((c) => c.code === couponCode) : null;
+  const discountAmount = coupon
+    ? (coupon.discount_type === "percentage"
+      ? Number((total * Number(coupon.discount_value) / 100).toFixed(2))
+      : Math.min(total, Number(coupon.discount_value)))
+    : 0;
+  const payableTotal = Math.max(0, Number((total - discountAmount).toFixed(2)));
 
   return (
     <div
@@ -353,6 +398,33 @@ export default function CheckoutPage() {
             {/* Coupon */}
             <Card style={{ padding: 20 }}>
               <SectionTitle>Coupon code</SectionTitle>
+              {!couponApplied && (
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: COLORS.olive, marginBottom: 6 }}>Choose from active coupons</label>
+                  {loadingCoupons ? (
+                    <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>Loading coupons…</p>
+                  ) : availableCoupons.length > 0 ? (
+                    <select
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value);
+                        setCouponError("");
+                      }}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid rgba(32,29,24,0.2)", fontSize: 13, marginBottom: 10 }}
+                    >
+                      <option value="">Select a coupon</option>
+                      {availableCoupons.map((c) => (
+                        <option key={c.coupon_id} value={c.code}>
+                          {c.code} • {c.discount_type === "percentage" ? `${c.discount_value}% off` : `₹${c.discount_value} off`}
+                          {c.expiry_date ? ` (valid until ${new Date(c.expiry_date).toLocaleDateString("en-IN")})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p style={{ fontSize: 12, color: COLORS.olive, margin: 0 }}>No active coupons currently.</p>
+                  )}
+                </div>
+              )}
               {!couponApplied ? (
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
@@ -415,17 +487,17 @@ export default function CheckoutPage() {
                   <span>Shipping</span>
                   <span style={{ color: "#16a34a", fontWeight: 700 }}>FREE</span>
                 </div>
-                {couponApplied && (
+                {couponApplied && coupon && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
-                    <span>Coupon ({couponCode})</span>
-                    <span>Applied at checkout</span>
+                    <span>Coupon ({coupon.code})</span>
+                    <span>-₹{discountAmount.toLocaleString("en-IN")}</span>
                   </div>
                 )}
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 900, color: COLORS.ink, marginBottom: 20 }}>
                 <span>Total</span>
-                <span style={{ color: COLORS.primary }}>₹{total.toLocaleString("en-IN")}</span>
+                <span style={{ color: COLORS.primary }}>₹{payableTotal.toLocaleString("en-IN")}</span>
               </div>
 
               {/* Error message */}

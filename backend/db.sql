@@ -818,6 +818,17 @@ BEGIN
       RAISE EXCEPTION 'Invalid or expired coupon: %', p_coupon_code;
     END IF;
 
+    -- Enforce one-time use per customer within coupon validity period
+    IF EXISTS (
+      SELECT 1
+      FROM order_coupons oc
+      JOIN orders o ON o.order_id = oc.order_id
+      WHERE o.customer_id = p_customer_id
+        AND oc.coupon_id = v_coupon_id
+    ) THEN
+      RAISE EXCEPTION 'Coupon % has already been used by this customer', p_coupon_code;
+    END IF;
+
     IF v_disc_type = 'percentage' THEN
       v_discount := v_total * v_disc_val / 100;
     ELSE

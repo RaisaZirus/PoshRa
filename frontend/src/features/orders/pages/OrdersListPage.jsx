@@ -141,11 +141,23 @@ export default function OrdersListPage() {
                         <StatusBadge status={order.order_status} />
                         <StatusBadge status={order.payment_status} />
                       </div>
+                      {order.coupon_code && (
+                        <div style={{ marginTop: 8, padding: "4px 8px", background: "rgba(22,163,74,0.08)", borderRadius: 6, display: "inline-block" }}>
+                          <p style={{ margin: 0, fontSize: 11, color: "#16a34a", fontWeight: 700 }}>
+                            Coupon: {order.coupon_code}
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <p style={{ fontWeight: 900, fontSize: 18, color: COLORS.primary, margin: "0 0 6px" }}>
                         ₹{Number(order.total_amount).toLocaleString("en-IN")}
                       </p>
+                      {order.coupon_code && (
+                        <p style={{ fontSize: 11, color: "#16a34a", margin: "2px 0 6px" }}>
+                          {order.coupon_code} applied → -₹{Number(order.coupon_amount || 0).toLocaleString("en-IN")}
+                        </p>
+                      )}
                       <p style={{ fontSize: 12, color: COLORS.olive, margin: 0, fontWeight: 700 }}>
                         View details →
                       </p>

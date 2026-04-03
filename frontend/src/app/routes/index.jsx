@@ -67,6 +67,7 @@ import AdminDashboardBuilderPage from "../../features/admin/pages/AdminDashboard
 import AdminProductViewsPage from "../../features/admin/pages/AdminProductViewsPage.jsx";
 import AdminStoresPage from "../../features/admin/pages/AdminStoresPage.jsx";
 import AdminCouriersPage from "../../features/admin/pages/AdminCouriersPage.jsx";
+import AdminCouponsPage from "../../features/admin/pages/AdminCouponsPage.jsx";
 
 const router = createBrowserRouter([
   {
@@ -178,6 +179,7 @@ const router = createBrowserRouter([
       { path: "product-views", element: <AdminProductViewsPage /> },
       { path: "stores", element: <AdminStoresPage /> },
       { path: "couriers", element: <AdminCouriersPage /> },
+      { path: "coupons", element: <AdminCouponsPage /> },
     ],
   },
 
