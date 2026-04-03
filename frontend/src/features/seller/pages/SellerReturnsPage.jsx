@@ -16,13 +16,13 @@ function StatusBadge({ status }) {
   return <span style={{ background: s.bg, color: s.text, fontWeight: 800, fontSize: 11, padding: "3px 9px", borderRadius: 999, textTransform: "capitalize" }}>{status}</span>;
 }
 
-const FILTERS = ["all", "requested", "approved", "rejected", "completed"];
+const FILTERS = ["all"];
 
 export default function SellerReturnsPage() {
   const { fetchWithAuth } = useAuth();
   const [returns, setReturns] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [filter, setFilter] = React.useState("all");
+  const [filter] = React.useState("all");
 
   React.useEffect(() => {
     fetchWithAuth("/api/seller/returns")
@@ -46,7 +46,7 @@ export default function SellerReturnsPage() {
     } catch (err) { alert(err.message); }
   };
 
-  const filtered = filter === "all" ? returns : returns.filter((r) => r.status === filter);
+  const filtered = returns;
   const pending = returns.filter((r) => r.status === "requested").length;
 
   return (
@@ -60,24 +60,7 @@ export default function SellerReturnsPage() {
         )}
       </div>
 
-      {/* Filter tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        {FILTERS.map((f) => (
-          <button key={f} onClick={() => setFilter(f)}
-            style={{ padding: "7px 14px", borderRadius: 10, border: "none", cursor: "pointer",
-              fontSize: 12, fontWeight: 800, textTransform: "capitalize",
-              background: filter === f ? COLORS.ink : COLORS.bg,
-              color: filter === f ? COLORS.primary : COLORS.olive,
-              boxShadow: "0 1px 4px rgba(32,29,24,0.08)" }}>
-            {f}
-            {f === "requested" && pending > 0 && (
-              <span style={{ marginLeft: 6, background: "#d97706", color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>
-                {pending}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+
 
       {loading ? (
         <p style={{ color: COLORS.olive, fontWeight: 700 }}>Loading...</p>

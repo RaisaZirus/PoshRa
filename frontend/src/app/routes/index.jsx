@@ -66,6 +66,7 @@ import AdminAuditLogsPage from "../../features/admin/pages/AdminAuditLogsPage.js
 import AdminDashboardBuilderPage from "../../features/admin/pages/AdminDashboardBuilderPage.jsx";
 import AdminProductViewsPage from "../../features/admin/pages/AdminProductViewsPage.jsx";
 import AdminStoresPage from "../../features/admin/pages/AdminStoresPage.jsx";
+import AdminCouriersPage from "../../features/admin/pages/AdminCouriersPage.jsx";
 
 const router = createBrowserRouter([
   {
@@ -176,6 +177,7 @@ const router = createBrowserRouter([
       { path: "dashboard-builder", element: <AdminDashboardBuilderPage /> },
       { path: "product-views", element: <AdminProductViewsPage /> },
       { path: "stores", element: <AdminStoresPage /> },
+      { path: "couriers", element: <AdminCouriersPage /> },
     ],
   },
 

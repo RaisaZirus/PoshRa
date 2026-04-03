@@ -130,8 +130,9 @@ export const getOrderById = async (req, res) => {
     );
 
     const { rows: shipments } = await pool.query(
-      `SELECT sh.shipment_id, sh.tracking_number, sh.status,
-              sh.shipped_at, sh.delivered_at, co.name AS courier_name
+      `SELECT sh.shipment_id, sh.seller_order_id, sh.tracking_number, sh.status,
+              sh.shipped_at, sh.delivered_at, co.name AS courier_name,
+              co.contact_info AS courier_contact
        FROM shipments sh
        JOIN seller_orders so  ON so.seller_order_id = sh.seller_order_id
        LEFT JOIN couriers co  ON co.courier_id      = sh.courier_id

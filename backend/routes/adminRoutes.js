@@ -902,5 +902,101 @@ router.patch("/stores/:store_id/status", async (req, res) => {
   }
 });
 
+// ── GET /api/admin/couriers ────────────────────────────────────────────────────
+// List all couriers
+router.get("/couriers", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT courier_id, name, contact_info FROM couriers ORDER BY name ASC`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("admin couriers error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── POST /api/admin/couriers ───────────────────────────────────────────────────
+// Create a new courier
+router.post("/couriers", async (req, res) => {
+  const { name, contact_info } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ success: false, message: "Courier name required" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO couriers (name, contact_info) VALUES ($1, $2) RETURNING courier_id, name, contact_info`,
+      [name.trim(), contact_info || null]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ success: false, message: "Courier name already exists" });
+    }
+    console.error("create courier error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/admin/couriers/:courier_id ─────────────────────────────────────
+// Update courier details
+router.patch("/couriers/:courier_id", async (req, res) => {
+  const { courier_id } = req.params;
+  const { name, contact_info } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ success: false, message: "Courier name required" });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE couriers SET name = $1, contact_info = $2 WHERE courier_id = $3 RETURNING courier_id, name, contact_info`,
+      [name.trim(), contact_info || null, courier_id]
+    );
+    
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Courier not found" });
+    }
+    
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error("update courier error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── DELETE /api/admin/couriers/:courier_id ────────────────────────────────────
+// Delete a courier (if not used in shipments)
+router.delete("/couriers/:courier_id", async (req, res) => {
+  const { courier_id } = req.params;
+
+  try {
+    // Check if courier is used in any shipments
+    const { rows: shipmentRows } = await pool.query(
+      `SELECT COUNT(*) AS count FROM shipments WHERE courier_id = $1`,
+      [courier_id]
+    );
+    
+    if (shipmentRows[0].count > 0) {
+      return res.status(409).json({ success: false, message: "Cannot delete courier - it has shipments associated" });
+    }
+
+    const { rows } = await pool.query(
+      `DELETE FROM couriers WHERE courier_id = $1 RETURNING courier_id`,
+      [courier_id]
+    );
+    
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "Courier not found" });
+    }
+    
+    res.json({ success: true, message: "Courier deleted" });
+  } catch (err) {
+    console.error("delete courier error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 export default router;
 
