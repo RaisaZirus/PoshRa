@@ -78,6 +78,26 @@ export default function ProductDetailsPage() {
   const [postingReview, setPostingReview] = React.useState(false);
   const [reviewError, setReviewError] = React.useState("");
 
+  // ── View-log tracking ──────────────────────────────────────────────────────
+  // Records how long the user spent on this product page.
+  // Fires on unmount so we know the full duration_seconds.
+  useEffect(() => {
+    if (!product_id) return;
+    const start = Date.now();
+    return () => {
+      const duration = Math.round((Date.now() - start) / 1000);
+      // Fire-and-forget — don't block anything on this
+      fetch(`/api/products/${product_id}/view`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user?.userId ?? null,
+          duration_seconds: duration,
+        }),
+      }).catch(() => {});
+    };
+  }, [product_id, user?.userId]);
+
   useEffect(() => {
     const fetchProduct = async () => {
       try {
@@ -793,4 +813,4 @@ export default function ProductDetailsPage() {
       </div>
     </div>
   );
-}
+} 

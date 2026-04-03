@@ -119,6 +119,8 @@ export default function SearchResultsPage() {
   const [maxPrice, setMaxPrice] = React.useState("");
   const [inStock, setInStock] = React.useState("");
   const [sort, setSort] = React.useState("");
+  const [categoryId, setCategoryId] = React.useState("");
+  const [categories, setCategories] = React.useState([]);
 
   const [products, setProducts] = React.useState([]);
   const [total, setTotal] = React.useState(0);
@@ -129,6 +131,14 @@ export default function SearchResultsPage() {
   const debounceRef = React.useRef(null);
   const currentQ = searchParams.get("q") || "";
 
+  // ── Fetch categories for filter dropdown ──────────────────────────────────
+  React.useEffect(() => {
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((d) => setCategories(d.data || d || []))
+      .catch(() => {});
+  }, []);
+
   // ── Fetch search results ───────────────────────────────────────────────────
   const runSearch = React.useCallback(async (q, filters, pg) => {
     setLoading(true);
@@ -138,10 +148,12 @@ export default function SearchResultsPage() {
       if (q) params.set("q", q);
       params.set("page", pg);
       params.set("limit", LIMIT);
-      if (filters.minPrice) params.set("min_price", filters.minPrice);
-      if (filters.maxPrice) params.set("max_price", filters.maxPrice);
-      if (filters.inStock) params.set("in_stock", filters.inStock);
-      if (filters.sort) params.set("sort", filters.sort);
+      if (filters.minPrice)   params.set("min_price", filters.minPrice);
+      if (filters.maxPrice)   params.set("max_price", filters.maxPrice);
+      if (filters.inStock)    params.set("in_stock", filters.inStock);
+      if (filters.sort)       params.set("sort", filters.sort);
+      if (filters.categoryId) params.set("category_id", filters.categoryId);
+      if (user?.user_Id)       params.set("user_id", user.user_Id);
 
       const res = await fetch(`/api/products/search?${params}`);
       const data = await res.json();
@@ -154,7 +166,7 @@ export default function SearchResultsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.userId]);
 
   // ── Run search when URL query changes ──────────────────────────────────────
   React.useEffect(() => {
@@ -185,16 +197,16 @@ export default function SearchResultsPage() {
   };
 
   const handleApplyFilters = () => {
-    runSearch(currentQ, { minPrice, maxPrice, inStock, sort }, 1);
+    runSearch(currentQ, { minPrice, maxPrice, inStock, sort, categoryId }, 1);
   };
 
   const handleClearFilters = () => {
-    setMinPrice(""); setMaxPrice(""); setInStock(""); setSort("");
-    runSearch(currentQ, { minPrice: "", maxPrice: "", inStock: "", sort: "" }, 1);
+    setMinPrice(""); setMaxPrice(""); setInStock(""); setSort(""); setCategoryId("");
+    runSearch(currentQ, { minPrice: "", maxPrice: "", inStock: "", sort: "", categoryId: "" }, 1);
   };
 
   const handlePageChange = (newPage) => {
-    runSearch(currentQ, { minPrice, maxPrice, inStock, sort }, newPage);
+    runSearch(currentQ, { minPrice, maxPrice, inStock, sort, categoryId }, newPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -307,6 +319,19 @@ export default function SearchResultsPage() {
             </select>
           </div>
           <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>CATEGORY</p>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              style={{ ...s.input, width: 160 }}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.category_id} value={c.category_id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>SORT BY</p>
             <select
               value={sort}
@@ -317,6 +342,7 @@ export default function SearchResultsPage() {
               <option value="price_asc">Price: Low → High</option>
               <option value="price_desc">Price: High → Low</option>
               <option value="newest">Newest</option>
+              <option value="most_viewed">Most viewed</option>
             </select>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

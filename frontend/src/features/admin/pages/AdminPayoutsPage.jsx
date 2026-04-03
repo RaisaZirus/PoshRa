@@ -68,9 +68,7 @@ export default function AdminPayoutsPage() {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
-      setPayouts((prev) =>
-        prev.map((p) => p.payout_id === payout_id ? { ...p, status } : p)
-      );
+      await load();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -92,6 +90,12 @@ export default function AdminPayoutsPage() {
   const totalRequested = payouts
     .filter((p) => p.status === "requested")
     .reduce((s, p) => s + Number(p.amount), 0);
+  const totalProcessed = payouts
+    .filter((p) => p.status === "processed")
+    .reduce((s, p) => s + Number(p.amount), 0);
+  const totalFailed = payouts
+    .filter((p) => p.status === "failed")
+    .reduce((s, p) => s + Number(p.amount), 0);
 
   return (
     <div>
@@ -106,7 +110,12 @@ export default function AdminPayoutsPage() {
               {fmtMoney(totalRequested)} pending
             </span>
           )}
-          <span style={{ fontSize: 12, fontWeight: 800, color: C.olive }}>{meta.total} total</span>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: C.olive }}>Requested: {fmtMoney(totalRequested)}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: C.olive }}>Processed: {fmtMoney(totalProcessed)}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: C.olive }}>Failed: {fmtMoney(totalFailed)}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: C.olive }}>{meta.total} total</span>
+          </div>
         </div>
       </div>
 

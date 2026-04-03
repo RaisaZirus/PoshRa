@@ -149,6 +149,21 @@ export default function SellerDashboardPage() {
         </div>
       </div>
 
+      {/* Pending store approval banners */}
+      {stores.filter((s) => s.store_status === "pending").map((s) => (
+        <div key={s.store_id} style={{
+          display: "flex", alignItems: "center", gap: 12,
+          background: "#FEF9C3", border: "1px solid #FDE047",
+          borderRadius: 12, padding: "12px 16px", marginBottom: 16,
+          fontSize: 13, fontWeight: 700, color: "#A16207",
+        }}>
+          <span style={{ fontSize: 18 }}>⏳</span>
+          <span>
+            <strong>{s.store_name}</strong> is pending admin approval. Your products will go live once approved — usually within 24 hours.
+          </span>
+        </div>
+      ))}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14, marginBottom: 32 }}>
         {STAT_CARDS.map((s) => (
           <Link key={s.label} to={s.link} style={{ textDecoration: "none" }}>

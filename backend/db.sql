@@ -1006,7 +1006,7 @@ SELECT
   c.customer_id,
   u.name                                          AS customer_name,
   u.email,
-  u.created_at                                    AS joined_at,
+  u.created_at                                    AS joined_at,B
   COUNT(DISTINCT o.order_id)::INT                 AS total_orders,
   COALESCE(SUM(o.total_amount), 0)               AS lifetime_value,
   COALESCE(AVG(o.total_amount), 0)               AS avg_order_value,

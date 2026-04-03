@@ -34,6 +34,19 @@ async function getSellerId(userId) {
   return rows[0].seller_id;
 }
 
+async function updateFinanceKpis({ requested = 0, processed = 0 } = {}, client = null) {
+  const q = client || pool;
+  await q.query(
+    `INSERT INTO finance_kpis_daily (kpi_date, payouts_requested, payouts_processed)
+     VALUES (CURRENT_DATE, $1, $2)
+     ON CONFLICT (kpi_date)
+     DO UPDATE SET
+       payouts_requested = finance_kpis_daily.payouts_requested + EXCLUDED.payouts_requested,
+       payouts_processed = finance_kpis_daily.payouts_processed + EXCLUDED.payouts_processed`,
+    [requested, processed]
+  );
+}
+
 // ── GET /api/seller/dashboard ─────────────────────────────────────────────────
 // Complex query: aggregates across seller_orders, products, stores
 router.get("/dashboard", async (req, res) => {
@@ -371,13 +384,26 @@ router.get("/payouts", async (req, res) => {
        ORDER BY requested_at DESC`,
       [sellerId]
     );
-    const { rows: balRows } = await pool.query(
-      `SELECT COALESCE(SUM(subtotal), 0)::numeric AS available
+
+    const { rows: earningsRows } = await pool.query(
+      `SELECT COALESCE(SUM(subtotal), 0)::numeric AS total_earned
        FROM seller_orders
        WHERE seller_id = $1 AND status = 'delivered'`,
       [sellerId]
     );
-    res.json({ success: true, data: rows, available_balance: balRows[0].available });
+
+    const { rows: reservedRows } = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0)::numeric AS reserved
+       FROM payouts
+       WHERE seller_id = $1 AND status IN ('requested', 'processed')`,
+      [sellerId]
+    );
+
+    const totalEarned = Number(earningsRows[0].total_earned || 0);
+    const reserved = Number(reservedRows[0].reserved || 0);
+    const availableBalance = Math.max(0, totalEarned - reserved);
+
+    res.json({ success: true, data: rows, available_balance: availableBalance });
   } catch (err) {
     console.error("seller payouts error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -403,6 +429,8 @@ router.post("/payouts", async (req, res) => {
        RETURNING payout_id, amount, status, requested_at`,
       [sellerId, amount]
     );
+
+    await updateFinanceKpis({ requested: Number(amount) }, client);
 
     await client.query("COMMIT");
     res.status(201).json({ success: true, data: rows[0] });
@@ -430,7 +458,7 @@ router.post("/stores", async (req, res) => {
 
     const { rows } = await client.query(
       `INSERT INTO stores (seller_id, store_name, store_slug, store_status)
-       VALUES ($1, $2, $3, 'active')
+       VALUES ($1, $2, $3, 'pending')
        RETURNING store_id, store_name, store_slug, store_status`,
       [sellerId, store_name, store_slug.toLowerCase().replace(/[^a-z0-9-]/g, "-")]
     );

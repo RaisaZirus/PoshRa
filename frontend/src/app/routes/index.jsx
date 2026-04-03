@@ -25,6 +25,7 @@ import ResetPasswordPage from "../../features/auth/pages/ResetPasswordPage.jsx";
 // Customer flow
 import CartPage from "../../features/cart/pages/CartPage.jsx";
 import CheckoutPage from "../../features/cart/pages/CheckoutPage.jsx";
+import PaymentPage from "../../features/cart/pages/PaymentPage.jsx";
 
 import OrdersListPage from "../../features/orders/pages/OrdersListPage.jsx";
 import OrderDetailsPage from "../../features/orders/pages/OrderDetailsPage.jsx";
@@ -63,6 +64,8 @@ import AdminCommissionsPage from "../../features/admin/pages/AdminCommissionsPag
 import AdminPayoutsPage from "../../features/admin/pages/AdminPayoutsPage.jsx";
 import AdminAuditLogsPage from "../../features/admin/pages/AdminAuditLogsPage.jsx";
 import AdminDashboardBuilderPage from "../../features/admin/pages/AdminDashboardBuilderPage.jsx";
+import AdminProductViewsPage from "../../features/admin/pages/AdminProductViewsPage.jsx";
+import AdminStoresPage from "../../features/admin/pages/AdminStoresPage.jsx";
 
 const router = createBrowserRouter([
   {
@@ -82,6 +85,7 @@ const router = createBrowserRouter([
         children: [
           { path: "cart", element: <CartPage /> },
           { path: "checkout", element: <CheckoutPage /> },
+          { path: "payment/:order_id", element: <PaymentPage /> },
 
           { path: "orders", element: <OrdersListPage /> },
           { path: "orders/:order_id", element: <OrderDetailsPage /> },
@@ -170,6 +174,8 @@ const router = createBrowserRouter([
       { path: "payouts", element: <AdminPayoutsPage /> },
       { path: "audit-logs", element: <AdminAuditLogsPage /> },
       { path: "dashboard-builder", element: <AdminDashboardBuilderPage /> },
+      { path: "product-views", element: <AdminProductViewsPage /> },
+      { path: "stores", element: <AdminStoresPage /> },
     ],
   },
 
