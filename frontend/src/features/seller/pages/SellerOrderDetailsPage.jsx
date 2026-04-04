@@ -138,6 +138,16 @@ export default function SellerOrderDetailsPage() {
               <span>Subtotal</span>
               <span>৳{Number(order.subtotal).toLocaleString("en-BD")}</span>
             </div>
+            {order.commission_total > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6, fontSize: 13, color: "#dc2626", fontWeight: 700 }}>
+                <span>Commission ({((order.commission_total / order.subtotal) * 100).toFixed(1)}%)</span>
+                <span>-৳{Number(order.commission_total).toLocaleString("en-BD")}</span>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 16, borderTop: `1px solid rgba(32,29,24,0.12)`, marginTop: 8, paddingTop: 8 }}>
+              <span>Net earnings</span>
+              <span>৳{Number(order.subtotal - order.commission_total).toLocaleString("en-BD")}</span>
+            </div>
           </Card>
 
           {/* Return requests */}

@@ -78,7 +78,7 @@ export default function AdminDashboardPage() {
   if (error) return <p style={{ color: "#dc2626", fontWeight: 700 }}>{error}</p>;
   if (!data) return null;
 
-  const { stats, kpis, traffic, finance, coupons } = data;
+  const { stats } = data;
   const fmt = (n) => Number(n || 0).toLocaleString("en-BD");
   const fmtMoney = (n) => `৳${Number(n || 0).toLocaleString("en-BD")}`;
 
@@ -87,7 +87,10 @@ export default function AdminDashboardPage() {
     { label: "Total Sellers",    value: fmt(stats.total_sellers),  link: "/admin/users?role=seller", accent: "#a3e635" },
     { label: "Total Orders",     value: fmt(stats.total_orders),   accent: "#38bdf8" },
     { label: "Gross Merch Value",value: fmtMoney(stats.gmv),       accent: "#fb923c" },
-    { label: "Net Revenue",      value: fmtMoney(stats.net_revenue), accent: "#4ade80" },
+    { label: "Commission Earnings", value: fmtMoney(stats.commission_earnings?.total_earnings), accent: "#4ade80", sub: "platform revenue" },
+    { label: "Coupon Discounts", value: fmtMoney(stats.total_coupon_discounts), accent: "#f59e0b", sub: "customer savings" },
+    { label: "Shipping Revenue", value: fmtMoney(stats.total_shipping), accent: "#8b5cf6", sub: "delivery charges" },
+    { label: "Net Revenue",      value: fmtMoney(stats.net_revenue), accent: "#10b981" },
     { label: "Pending KYC",      value: fmt(stats.pending_kyc),    link: "/admin/users?kyc=pending", accent: "#f59e0b", sub: "sellers awaiting review" },
     { label: "Open Reports",     value: fmt(stats.pending_reports), link: "/admin/reports",    accent: "#f87171", sub: "need resolution" },
   ];
@@ -104,35 +107,6 @@ export default function AdminDashboardPage() {
       {/* Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 12, marginBottom: 28 }}>
         {STATS.map((s) => <StatCard key={s.label} {...s} />)}
-      </div>
-
-      {/* Charts Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginBottom: 28 }}>
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>Orders (last 14 days)</p>
-          <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Daily order volume</p>
-          <BarChart data={kpis} valueKey="total_orders" labelKey="kpi_date" color={C.primary} />
-        </Card>
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>GMV (last 14 days)</p>
-          <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Gross merchandise value</p>
-          <BarChart data={kpis} valueKey="gross_merch_value" labelKey="kpi_date" color="#fb923c" />
-        </Card>
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>New Users (last 14 days)</p>
-          <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>User registrations</p>
-          <BarChart data={kpis} valueKey="new_users" labelKey="kpi_date" color="#38bdf8" />
-        </Card>
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>Commissions (last 14 days)</p>
-          <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Platform earnings</p>
-          <BarChart data={finance} valueKey="commission_total" labelKey="kpi_date" color="#4ade80" />
-        </Card>
-        <Card>
-          <p style={{ fontSize: 13, fontWeight: 900, color: C.ink, margin: "0 0 4px" }}>Coupon Usage (last 14 days)</p>
-          <p style={{ fontSize: 11, color: C.olive, margin: "0 0 12px" }}>Orders with coupons applied</p>
-          <BarChart data={coupons} valueKey="coupon_orders" labelKey="coupon_date" color="#a855f7" />
-        </Card>
       </div>
 
       {/* Quick Links */}

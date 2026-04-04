@@ -130,7 +130,8 @@ export default function SellerDashboardPage() {
     { label: "Total orders", value: stats.total_orders, link: "/seller/orders" },
     { label: "Pending orders", value: stats.pending_orders, link: "/seller/orders?status=pending" },
     { label: "Active products", value: stats.active_products, link: "/seller/products" },
-    { label: "Revenue (delivered)", value: `৳${Number(stats.total_revenue).toLocaleString("en-BD")}`, link: "/seller/payouts" },
+    { label: "Net earnings", value: `৳${Number(stats.total_revenue).toLocaleString("en-BD")}`, link: "/seller/payouts" },
+    { label: "Commissions paid", value: `৳${Number(stats.total_commissions).toLocaleString("en-BD")}`, color: "#dc2626", link: "/seller/payouts" },
   ];
 
   return (
@@ -169,7 +170,7 @@ export default function SellerDashboardPage() {
           <Link key={s.label} to={s.link} style={{ textDecoration: "none" }}>
             <Card style={{ padding: 20 }}>
               <p style={{ fontSize: 12, color: COLORS.olive, fontWeight: 700, margin: "0 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</p>
-              <p style={{ fontSize: 26, fontWeight: 900, color: COLORS.ink, margin: 0 }}>{s.value}</p>
+              <p style={{ fontSize: 26, fontWeight: 900, color: s.color || COLORS.ink, margin: 0 }}>{s.value}</p>
             </Card>
           </Link>
         ))}

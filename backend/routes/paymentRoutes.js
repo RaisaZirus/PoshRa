@@ -144,6 +144,9 @@ router.post("/confirm", authMiddleware, async (req, res) => {
       [payment.order_id]
     );
 
+    // Record admin earnings from commissions
+    await client.query('CALL record_admin_earnings($1)', [payment.order_id]);
+
     // Notify customer
     await client.query(
       `INSERT INTO notifications (user_id, type, message)

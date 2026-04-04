@@ -64,7 +64,9 @@ router.get("/dashboard", async (req, res) => {
     const [
       usersRes, sellersRes, ordersRes, gmvRes,
       revenueRes, pendingKycRes, reportsRes,
+      shippingRes,
       kpiRes, trafficRes, financeRes, couponRes,
+      earningsRes, couponDiscountsRes,
     ] = await Promise.all([
       pool.query("SELECT COUNT(*)::int AS total FROM users"),
       pool.query("SELECT COUNT(*)::int AS total FROM sellers"),
@@ -76,6 +78,7 @@ router.get("/dashboard", async (req, res) => {
       ),
       pool.query("SELECT COUNT(*)::int AS total FROM sellers WHERE kyc_status = 'pending'"),
       pool.query("SELECT COUNT(*)::int AS total FROM reports WHERE status = 'pending'"),
+      pool.query("SELECT COALESCE(SUM(shipping_fee),0)::numeric AS total_shipping FROM orders"),
       pool.query(
         `SELECT kpi_date, new_users, new_sellers, total_orders, gross_merch_value, net_revenue
          FROM site_kpis_daily ORDER BY kpi_date DESC LIMIT 30`
@@ -97,6 +100,8 @@ router.get("/dashboard", async (req, res) => {
          GROUP BY DATE(o.created_at)
          ORDER BY coupon_date DESC`
       ),
+      pool.query("SELECT * FROM fn_admin_earnings_summary()"),
+      pool.query("SELECT COALESCE(SUM(applied_amount), 0)::numeric AS total_coupon_discounts FROM order_coupons"),
     ]);
 
     res.json({
@@ -108,8 +113,11 @@ router.get("/dashboard", async (req, res) => {
           total_orders:    ordersRes.rows[0].total,
           gmv:             gmvRes.rows[0].gmv,
           net_revenue:     revenueRes.rows[0].net_revenue,
+          total_shipping:  shippingRes.rows[0].total_shipping,
           pending_kyc:     pendingKycRes.rows[0].total,
           pending_reports: reportsRes.rows[0].total,
+          commission_earnings: earningsRes.rows[0],
+          total_coupon_discounts: couponDiscountsRes.rows[0].total_coupon_discounts,
         },
         kpis:    kpiRes.rows.reverse(),
         traffic: trafficRes.rows.reverse(),

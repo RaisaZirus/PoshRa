@@ -79,7 +79,12 @@ export default function SellerOrdersPage() {
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <p style={{ fontWeight: 900, fontSize: 16, color: COLORS.ink, margin: "0 0 4px" }}>৳{Number(o.subtotal).toLocaleString("en-BD")}</p>
+                <p style={{ fontWeight: 900, fontSize: 16, color: COLORS.ink, margin: "0 0 4px" }}>৳{Number(o.subtotal - o.commission_total).toLocaleString("en-BD")}</p>
+                {o.commission_total > 0 && (
+                  <p style={{ fontSize: 11, color: "#dc2626", margin: "0 0 2px", fontWeight: 700 }}>
+                    Commission: ৳{Number(o.commission_total).toLocaleString("en-BD")}
+                  </p>
+                )}
                 <p style={{ fontSize: 12, color: COLORS.olive, margin: 0, fontWeight: 700 }}>View →</p>
               </div>
             </Link>

@@ -314,10 +314,16 @@ CREATE TABLE inventory (
   UNIQUE (variant_id, warehouse_id)
 );
 
-CREATE TABLE wishlists (
-  wishlist_id       BIGSERIAL PRIMARY KEY,
-  customer_id       BIGINT NOT NULL REFERENCES customers(customer_id) ON DELETE CASCADE,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE admin_earnings (
+  earning_id        BIGSERIAL PRIMARY KEY,
+  order_id          BIGINT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  seller_order_id   BIGINT NOT NULL REFERENCES seller_orders(seller_order_id) ON DELETE CASCADE,
+  commission_amount NUMERIC(12,2) NOT NULL CHECK (commission_amount >= 0),
+  earned_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_admin_earnings_order_id ON admin_earnings(order_id);
+CREATE INDEX idx_admin_earnings_seller_order_id ON admin_earnings(seller_order_id);
 );
 
 CREATE TABLE wishlist_items (
@@ -325,22 +331,6 @@ CREATE TABLE wishlist_items (
   wishlist_id       BIGINT NOT NULL REFERENCES wishlists(wishlist_id) ON DELETE CASCADE,
   variant_id        BIGINT NOT NULL REFERENCES product_variants(variant_id) ON DELETE CASCADE,
   UNIQUE (wishlist_id, variant_id)
-);
-
-CREATE TABLE conversations (
-  conversation_id   BIGSERIAL PRIMARY KEY,
-  customer_id       BIGINT NOT NULL REFERENCES customers(customer_id) ON DELETE CASCADE,
-  seller_id         BIGINT NOT NULL REFERENCES sellers(seller_id) ON DELETE CASCADE,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (customer_id, seller_id)
-);
-
-CREATE TABLE messages (
-  message_id        BIGSERIAL PRIMARY KEY,
-  conversation_id   BIGINT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
-  sender_user_id    BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-  content           TEXT NOT NULL,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE notifications (
@@ -876,6 +866,7 @@ DECLARE
   v_coupon_id    BIGINT;
   v_discount     NUMERIC := 0;
   v_total        NUMERIC := 0;
+  v_temp_total   NUMERIC := 0;
   v_seller_id    BIGINT;
   v_subtotal     NUMERIC;
   v_so_id        BIGINT;
@@ -987,6 +978,24 @@ BEGIN
       SET stock = stock - v_item.quantity
       WHERE variant_id = v_item.variant_id;
     END LOOP;
+  END LOOP;
+
+  -- Apply coupon discount proportionally to seller orders if coupon was applied
+  IF v_coupon_id IS NOT NULL AND v_discount > 0 THEN
+    -- Calculate total order amount before discount for proportional distribution
+    SELECT COALESCE(SUM(subtotal), 0) INTO v_temp_total FROM seller_orders WHERE order_id = p_order_id;
+
+    -- Distribute discount proportionally across seller orders
+    UPDATE seller_orders
+    SET subtotal = ROUND(GREATEST(0, subtotal - (subtotal / v_temp_total * v_discount)), 2)
+    WHERE order_id = p_order_id;
+  END IF;
+
+  -- Calculate and store commission for all seller orders (after coupon discount applied)
+  FOR v_so_id IN SELECT seller_order_id FROM seller_orders WHERE order_id = p_order_id LOOP
+    UPDATE seller_orders
+    SET commission_total = fn_calculate_commission(v_so_id)
+    WHERE seller_order_id = v_so_id;
   END LOOP;
 
   -- Record coupon usage if applied
@@ -1161,3 +1170,76 @@ GROUP BY c.customer_id, u.name, u.email, u.created_at
 ORDER BY lifetime_value DESC;
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE seller_orders ADD COLUMN IF NOT EXISTS commission_total NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+
+-- -----------------------------------------------------------------------------
+-- Procedure: Record admin earnings from commissions when payment is completed
+-- This should be called when an order's payment status changes to 'paid'
+-- Usage: CALL record_admin_earnings(order_id);
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE record_admin_earnings(p_order_id BIGINT)
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_so_record RECORD;
+BEGIN
+  -- Only record earnings if order payment is completed
+  IF NOT EXISTS (
+    SELECT 1 FROM orders
+    WHERE order_id = p_order_id AND payment_status = 'paid'
+  ) THEN
+    RAISE EXCEPTION 'Order % payment is not completed', p_order_id;
+  END IF;
+
+  -- Insert commission earnings for each seller order
+  FOR v_so_record IN
+    SELECT seller_order_id, commission_total
+    FROM seller_orders
+    WHERE order_id = p_order_id AND commission_total > 0
+  LOOP
+    INSERT INTO admin_earnings (order_id, seller_order_id, commission_amount)
+    VALUES (p_order_id, v_so_record.seller_order_id, v_so_record.commission_total);
+  END LOOP;
+
+  -- Update daily finance KPIs
+  INSERT INTO finance_kpis_daily (kpi_date, commission_total)
+  VALUES (
+    CURRENT_DATE,
+    COALESCE((
+      SELECT SUM(commission_total)
+      FROM seller_orders
+      WHERE order_id = p_order_id
+    ), 0)
+  )
+  ON CONFLICT (kpi_date)
+  DO UPDATE SET
+    commission_total = finance_kpis_daily.commission_total + EXCLUDED.commission_total;
+
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- -----------------------------------------------------------------------------
+-- Function: Get admin earnings summary for dashboard
+-- Returns total earnings, today's earnings, and earnings by date
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_admin_earnings_summary()
+RETURNS TABLE (
+  total_earnings     NUMERIC,
+  today_earnings     NUMERIC,
+  monthly_earnings   NUMERIC,
+  yearly_earnings    NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COALESCE(SUM(ae.commission_amount), 0) AS total_earnings,
+    COALESCE(SUM(CASE WHEN DATE(ae.earned_at) = CURRENT_DATE THEN ae.commission_amount END), 0) AS today_earnings,
+    COALESCE(SUM(CASE WHEN DATE_TRUNC('month', ae.earned_at) = DATE_TRUNC('month', CURRENT_DATE) THEN ae.commission_amount END), 0) AS monthly_earnings,
+    COALESCE(SUM(CASE WHEN DATE_TRUNC('year', ae.earned_at) = DATE_TRUNC('year', CURRENT_DATE) THEN ae.commission_amount END), 0) AS yearly_earnings
+  FROM admin_earnings ae;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- -----------------------------------------------------------------------------
