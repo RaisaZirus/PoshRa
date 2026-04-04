@@ -822,6 +822,242 @@ router.patch("/payouts/:payout_id", async (req, res) => {
   }
 });
 
+// ── GET /api/admin/search-logs ─────────────────────────────────────────────
+// Returns recent search logs and top search phrases.
+router.get("/search-logs", async (req, res) => {
+  try {
+    const { query, from, to, page = 1, limit = 30 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const conditions = [];
+    const params = [];
+
+    if (query) {
+      params.push(`%${query}%`);
+      conditions.push(`sl.query ILIKE $${params.length}`);
+    }
+    if (from) {
+      params.push(from);
+      conditions.push(`sl.created_at >= $${params.length}::timestamptz`);
+    }
+    if (to) {
+      params.push(to);
+      conditions.push(`sl.created_at <= $${params.length}::timestamptz`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM search_logs sl ${where}`,
+      params
+    );
+
+    params.push(Number(limit), offset);
+    const { rows } = await pool.query(
+      `SELECT
+         sl.search_id,
+         sl.query,
+         sl.filters,
+         sl.user_id,
+         u.name  AS user_name,
+         u.email AS user_email,
+         sl.created_at
+       FROM search_logs sl
+       LEFT JOIN users u ON u.user_id = sl.user_id
+       ${where}
+       ORDER BY sl.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    const topRes = await pool.query(
+      `SELECT query, COUNT(*)::int AS count
+       FROM search_logs
+       GROUP BY query
+       ORDER BY count DESC
+       LIMIT 10`
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      top_searches: topRes.rows,
+      meta: { total: countRes.rows[0].total, page: Number(page), limit: Number(limit) },
+    });
+  } catch (err) {
+    console.error("admin search logs error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// ── GET /api/admin/site-kpis ─────────────────────────────────────────────
+// Returns site KPIs with optional date range and aggregation.
+router.get("/site-kpis", async (req, res) => {
+  try {
+    const { from, to, group_by = 'day' } = req.query;
+    let query = `
+      SELECT kpi_date,
+             new_users,
+             new_sellers,
+             total_orders,
+             gross_merch_value,
+             net_revenue,
+             refunds_total
+      FROM site_kpis_daily
+      WHERE 1=1
+    `;
+    const params = [];
+    if (from) {
+      params.push(from);
+      query += ` AND kpi_date >= $${params.length}`;
+    }
+    if (to) {
+      params.push(to);
+      query += ` AND kpi_date <= $${params.length}`;
+    }
+    query += ` ORDER BY kpi_date DESC`;
+
+    if (group_by === 'month') {
+      query = `
+        SELECT DATE_TRUNC('month', kpi_date) AS period,
+               SUM(new_users)::int AS new_users,
+               SUM(new_sellers)::int AS new_sellers,
+               SUM(total_orders)::int AS total_orders,
+               SUM(gross_merch_value)::numeric AS gross_merch_value,
+               SUM(net_revenue)::numeric AS net_revenue,
+               SUM(refunds_total)::numeric AS refunds_total
+        FROM site_kpis_daily
+        WHERE 1=1
+      `;
+      if (from) {
+        params.push(from);
+        query += ` AND kpi_date >= $${params.length}`;
+      }
+      if (to) {
+        params.push(to);
+        query += ` AND kpi_date <= $${params.length}`;
+      }
+      query += ` GROUP BY DATE_TRUNC('month', kpi_date) ORDER BY period DESC`;
+    }
+
+    const result = await pool.query(query, params);
+    let rows = result.rows;
+
+    if (rows.length === 0) {
+      const rangeRes = await pool.query(
+        `SELECT
+           COALESCE((SELECT MIN(created_at)::date FROM users), CURRENT_DATE)  AS min_user,
+           COALESCE((SELECT MIN(created_at)::date FROM sellers), CURRENT_DATE) AS min_seller,
+           COALESCE((SELECT MIN(created_at)::date FROM orders), CURRENT_DATE) AS min_order,
+           COALESCE((SELECT MIN(created_at)::date FROM refunds), CURRENT_DATE) AS min_refund,
+           COALESCE((SELECT MAX(created_at)::date FROM users), CURRENT_DATE)  AS max_user,
+           COALESCE((SELECT MAX(created_at)::date FROM sellers), CURRENT_DATE) AS max_seller,
+           COALESCE((SELECT MAX(created_at)::date FROM orders), CURRENT_DATE) AS max_order,
+           COALESCE((SELECT MAX(created_at)::date FROM refunds), CURRENT_DATE) AS max_refund
+         `
+      );
+
+      const dates = rangeRes.rows[0];
+      const startDate = from || [dates.min_user, dates.min_seller, dates.min_order, dates.min_refund].reduce((a, b) => (a < b ? a : b));
+      const endDate = to || [dates.max_user, dates.max_seller, dates.max_order, dates.max_refund].reduce((a, b) => (a > b ? a : b));
+
+      if (startDate && endDate && startDate <= endDate) {
+        if (group_by === 'month') {
+          const fallback = await pool.query(
+            `SELECT
+               DATE_TRUNC('month', d)::date AS period,
+               SUM(COALESCE(u.new_users,0))::int     AS new_users,
+               SUM(COALESCE(s.new_sellers,0))::int   AS new_sellers,
+               SUM(COALESCE(o.total_orders,0))::int  AS total_orders,
+               SUM(COALESCE(o.gmv,0))::numeric       AS gross_merch_value,
+               SUM(COALESCE(o.gmv,0))::numeric       AS net_revenue,
+               SUM(COALESCE(r.refunds_total,0))::numeric AS refunds_total
+             FROM generate_series($1::date, $2::date, '1 day') d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COUNT(*)::int AS new_users
+               FROM users GROUP BY DATE(created_at)
+             ) u ON u.kpi_date = d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COUNT(*)::int AS new_sellers
+               FROM sellers GROUP BY DATE(created_at)
+             ) s ON s.kpi_date = d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COUNT(*)::int AS total_orders,
+                      COALESCE(SUM(total_amount),0)::numeric AS gmv
+               FROM orders GROUP BY DATE(created_at)
+             ) o ON o.kpi_date = d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COALESCE(SUM(amount),0)::numeric AS refunds_total
+               FROM refunds GROUP BY DATE(created_at)
+             ) r ON r.kpi_date = d
+             GROUP BY DATE_TRUNC('month', d)
+             ORDER BY period DESC`,
+            [startDate, endDate]
+          );
+          rows = fallback.rows;
+        } else {
+          const fallback = await pool.query(
+            `SELECT
+               d::date AS kpi_date,
+               COALESCE(u.new_users,0)    AS new_users,
+               COALESCE(s.new_sellers,0)  AS new_sellers,
+               COALESCE(o.total_orders,0) AS total_orders,
+               COALESCE(o.gmv,0)::numeric  AS gross_merch_value,
+               COALESCE(o.gmv,0)::numeric  AS net_revenue,
+               COALESCE(r.refunds_total,0)::numeric AS refunds_total
+             FROM generate_series($1::date, $2::date, '1 day') d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COUNT(*)::int AS new_users
+               FROM users GROUP BY DATE(created_at)
+             ) u ON u.kpi_date = d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COUNT(*)::int AS new_sellers
+               FROM sellers GROUP BY DATE(created_at)
+             ) s ON s.kpi_date = d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COUNT(*)::int AS total_orders,
+                      COALESCE(SUM(total_amount),0)::numeric AS gmv
+               FROM orders GROUP BY DATE(created_at)
+             ) o ON o.kpi_date = d
+             LEFT JOIN (
+               SELECT DATE(created_at) AS kpi_date, COALESCE(SUM(amount),0)::numeric AS refunds_total
+               FROM refunds GROUP BY DATE(created_at)
+             ) r ON r.kpi_date = d
+             ORDER BY kpi_date DESC`,
+            [startDate, endDate]
+          );
+          rows = fallback.rows;
+        }
+      }
+    }
+
+    const totals = rows.reduce((acc, row) => ({
+      new_users: acc.new_users + row.new_users,
+      new_sellers: acc.new_sellers + row.new_sellers,
+      total_orders: acc.total_orders + row.total_orders,
+      gross_merch_value: acc.gross_merch_value + Number(row.gross_merch_value),
+      net_revenue: acc.net_revenue + Number(row.net_revenue),
+      refunds_total: acc.refunds_total + Number(row.refunds_total),
+    }), {
+      new_users: 0,
+      new_sellers: 0,
+      total_orders: 0,
+      gross_merch_value: 0,
+      net_revenue: 0,
+      refunds_total: 0,
+    });
+
+    res.json({
+      success: true,
+      data: rows,
+      totals,
+      meta: { group_by, from, to },
+    });
+  } catch (err) {
+    console.error("admin site kpis error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 // ── GET /api/admin/product-views ─────────────────────────────────────────────
 // Returns paginated view_logs with product + user info.
 // Supports filtering by product_id, date range.

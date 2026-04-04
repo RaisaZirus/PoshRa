@@ -19,9 +19,10 @@ const NAV = [
   { to: "/admin/commissions",       label: "Commissions",       icon: "◐" },
   { to: "/admin/payouts",           label: "Payouts",           icon: "◑" },
   { to: "/admin/audit-logs",        label: "Audit Logs",        icon: "▦" },
-  { to: "/admin/dashboard-builder", label: "KPI Builder",       icon: "◩" },
   { to: "/admin/stores",            label: "Store Approvals",   icon: "🏪" },
   { to: "/admin/product-views",     label: "Product Views",     icon: "👁" },
+  { to: "/admin/search-logs",       label: "Search Logs",       icon: "🔎" },
+  { to: "/admin/site-kpis",         label: "Site KPIs",         icon: "📊" },
   { to: "/admin/couriers",          label: "Couriers",          icon: "📦" },
   { to: "/admin/coupons",           label: "Coupons",           icon: "🏷" },
 ];

@@ -63,8 +63,9 @@ import AdminCampaignsPage from "../../features/admin/pages/AdminCampaignsPage.js
 import AdminCommissionsPage from "../../features/admin/pages/AdminCommissionsPage.jsx";
 import AdminPayoutsPage from "../../features/admin/pages/AdminPayoutsPage.jsx";
 import AdminAuditLogsPage from "../../features/admin/pages/AdminAuditLogsPage.jsx";
-import AdminDashboardBuilderPage from "../../features/admin/pages/AdminDashboardBuilderPage.jsx";
 import AdminProductViewsPage from "../../features/admin/pages/AdminProductViewsPage.jsx";
+import AdminSearchLogsPage from "../../features/admin/pages/AdminSearchLogsPage.jsx";
+import AdminSiteKpisPage from "../../features/admin/pages/AdminSiteKpisPage.jsx";
 import AdminStoresPage from "../../features/admin/pages/AdminStoresPage.jsx";
 import AdminCouriersPage from "../../features/admin/pages/AdminCouriersPage.jsx";
 import AdminCouponsPage from "../../features/admin/pages/AdminCouponsPage.jsx";
@@ -175,8 +176,9 @@ const router = createBrowserRouter([
       { path: "commissions", element: <AdminCommissionsPage /> },
       { path: "payouts", element: <AdminPayoutsPage /> },
       { path: "audit-logs", element: <AdminAuditLogsPage /> },
-      { path: "dashboard-builder", element: <AdminDashboardBuilderPage /> },
       { path: "product-views", element: <AdminProductViewsPage /> },
+      { path: "search-logs", element: <AdminSearchLogsPage /> },
+      { path: "site-kpis", element: <AdminSiteKpisPage /> },
       { path: "stores", element: <AdminStoresPage /> },
       { path: "couriers", element: <AdminCouriersPage /> },
       { path: "coupons", element: <AdminCouponsPage /> },

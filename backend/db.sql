@@ -368,6 +368,10 @@ CREATE TABLE search_logs (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX idx_search_logs_query ON search_logs(LOWER(query));
+CREATE INDEX idx_search_logs_created_at ON search_logs(created_at);
+CREATE INDEX idx_search_logs_user_id ON search_logs(user_id);
+
 CREATE TABLE click_logs (
   click_id          BIGSERIAL PRIMARY KEY,
   user_id           BIGINT REFERENCES users(user_id) ON DELETE SET NULL,
@@ -629,6 +633,108 @@ DROP TRIGGER IF EXISTS trg_log_price_change ON product_variants;
 CREATE TRIGGER trg_log_price_change
 AFTER UPDATE OF price ON product_variants
 FOR EACH ROW EXECUTE FUNCTION fn_log_price_change();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 5: Increment daily search KPI on each search log insert
+-- Keeps traffic_kpis_daily.searches in sync with the raw search log table.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_increment_search_traffic()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO traffic_kpis_daily (kpi_date, searches)
+  VALUES (DATE(NEW.created_at), 1)
+  ON CONFLICT (kpi_date) DO UPDATE
+  SET searches = traffic_kpis_daily.searches + 1;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_increment_search_traffic ON search_logs;
+CREATE TRIGGER trg_increment_search_traffic
+AFTER INSERT ON search_logs
+FOR EACH ROW EXECUTE FUNCTION fn_increment_search_traffic();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 6: Increment daily site KPI for new users
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_increment_new_users()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO site_kpis_daily (kpi_date, new_users)
+  VALUES (DATE(NEW.created_at), 1)
+  ON CONFLICT (kpi_date) DO UPDATE
+  SET new_users = site_kpis_daily.new_users + 1;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_increment_new_users ON users;
+CREATE TRIGGER trg_increment_new_users
+AFTER INSERT ON users
+FOR EACH ROW EXECUTE FUNCTION fn_increment_new_users();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 7: Increment daily site KPI for new sellers
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_increment_new_sellers()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO site_kpis_daily (kpi_date, new_sellers)
+  VALUES (DATE(NEW.created_at), 1)
+  ON CONFLICT (kpi_date) DO UPDATE
+  SET new_sellers = site_kpis_daily.new_sellers + 1;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_increment_new_sellers ON sellers;
+CREATE TRIGGER trg_increment_new_sellers
+AFTER INSERT ON sellers
+FOR EACH ROW EXECUTE FUNCTION fn_increment_new_sellers();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 8: Increment daily site KPI for orders and GMV
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_increment_orders_gmv()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO site_kpis_daily (kpi_date, total_orders, gross_merch_value)
+  VALUES (DATE(NEW.created_at), 1, NEW.total_amount)
+  ON CONFLICT (kpi_date) DO UPDATE
+  SET total_orders = site_kpis_daily.total_orders + 1,
+      gross_merch_value = site_kpis_daily.gross_merch_value + NEW.total_amount;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_increment_orders_gmv ON orders;
+CREATE TRIGGER trg_increment_orders_gmv
+AFTER INSERT ON orders
+FOR EACH ROW EXECUTE FUNCTION fn_increment_orders_gmv();
+
+
+-- -----------------------------------------------------------------------------
+-- Trigger 9: Increment daily site KPI for refunds
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_increment_refunds()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO site_kpis_daily (kpi_date, refunds_total)
+  VALUES (DATE(NEW.created_at), NEW.amount)
+  ON CONFLICT (kpi_date) DO UPDATE
+  SET refunds_total = site_kpis_daily.refunds_total + NEW.amount;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_increment_refunds ON refunds;
+CREATE TRIGGER trg_increment_refunds
+AFTER INSERT ON refunds
+FOR EACH ROW EXECUTE FUNCTION fn_increment_refunds();
 
 
 -- =============================================================================
