@@ -112,6 +112,31 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log("Server is running on port " + PORT);
     });
+    setInterval(async () => {
+  try {
+    const { rows: campaigns } = await pool.query(
+      `SELECT campaign_id, name
+       FROM campaigns
+       WHERE start_time <= NOW()
+         AND notified_at IS NULL`
+    );
+    for (const campaign of campaigns) {
+      const message = `🎉 Campaign "${campaign.name}" has started! Check out the deals now.`;
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, message)
+         SELECT user_id, 'campaign', $1 FROM users WHERE is_active = true`,
+        [message]
+      );
+      await pool.query(
+        `UPDATE campaigns SET notified_at = NOW() WHERE campaign_id = $1`,
+        [campaign.campaign_id]
+      );
+      console.log(`[campaign-notifier] Notified users: campaign '${campaign.name}'`);
+    }
+  } catch (err) {
+    console.error("[campaign-notifier] error:", err.message);
+  }
+}, 60 * 1000);
   } catch (err) {
     console.error("Server startup failed:", err.message);
     process.exit(1);

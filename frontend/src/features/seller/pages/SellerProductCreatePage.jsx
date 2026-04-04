@@ -49,7 +49,7 @@ export default function SellerProductCreatePage() {
         setForm((f) => ({ ...f, store_id: storeData.data[0].store_id }));
       }
     }).catch(console.error)
-    .finally(() => setLoading(false));
+      .finally(() => setLoading(false));
   }, []);
 
   const setVariant = (i, key, val) => setVariants((prev) => prev.map((v, idx) => idx === i ? { ...v, [key]: val } : v));
@@ -156,7 +156,16 @@ export default function SellerProductCreatePage() {
               <select value={form.category_id} onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}
                 style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: `1.5px solid rgba(32,29,24,0.2)`, fontSize: 14, fontWeight: 600 }}>
                 <option value="">No category</option>
-                {categories.map((c) => <option key={c.category_id} value={c.category_id}>{c.parent_id ? `  └ ${c.name}` : c.name}</option>)}
+                {categories
+                  .filter((c) => !c.parent_id)
+                  .flatMap((parent) => [
+                    <option key={parent.category_id} value={parent.category_id}>{parent.name}</option>,
+                    ...categories
+                      .filter((c) => String(c.parent_id) === String(parent.category_id))
+                      .map((child) => (
+                        <option key={child.category_id} value={child.category_id}>{"  └ " + child.name}</option>
+                      )),
+                  ])}
               </select>
             </div>
             <div>

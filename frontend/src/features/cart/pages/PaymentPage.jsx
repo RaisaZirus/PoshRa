@@ -269,9 +269,13 @@ export default function PaymentPage() {
               <SectionTitle>Order summary</SectionTitle>
 
               <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
+                  <span>Subtotal</span>
+                  <span>₹{Number((order.total_amount || 0) - (order.shipping_fee || 0)).toLocaleString("en-BD")}</span>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive }}>
-                  <span>Amount</span>
-                  <span>₹{Number(order.total_amount || 0).toLocaleString("en-BD")}</span>
+                  <span>Shipping</span>
+                  <span style={{ color: "#16a34a", fontWeight: 700 }}>₹{Number(order.shipping_fee || 0).toLocaleString("en-BD")}</span>
                 </div>
               </div>
 

@@ -35,15 +35,29 @@ export const createOrder = async (req, res) => {
     [customerId, address_id, coupon_code || null]
     );//changeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 
+    // Determine shipping fee based on city
+const { rows: addrRows } = await client.query(
+  "SELECT city FROM addresses WHERE address_id = $1",
+  [address_id]
+);
+const city = (addrRows[0]?.city || "").toLowerCase().trim();
+const shippingFee = city === "dhaka" ? 60 : 120;
+
+const totalWithShipping = Number(rows[0].total) + shippingFee;
+await client.query(
+  "UPDATE orders SET shipping_fee = $1, total_amount = $2 WHERE order_id = $3",
+  [shippingFee, totalWithShipping, rows[0].order_id]
+);
     await client.query("COMMIT");
 
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
       data: {
-        order_id: rows[0].order_id,
-        total_amount: rows[0].total,
-      },
+  order_id: rows[0].order_id,
+  total_amount: totalWithShipping,
+  shipping_fee: shippingFee,
+},
     });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -105,7 +119,7 @@ export const getOrderById = async (req, res) => {
 
   try {
     const { rows: orderRows } = await pool.query(
-      `SELECT o.order_id, o.total_amount, o.order_status, o.payment_status,
+      `SELECT o.order_id, o.total_amount, o.shipping_fee, o.order_status, o.payment_status,
               o.created_at, a.city, a.area, a.details AS address_details,
               cp.code AS coupon_code, oc.applied_amount AS coupon_amount
        FROM orders o

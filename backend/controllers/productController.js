@@ -433,26 +433,67 @@ export const searchProducts = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
 // ─── GET /api/products/suggestions ───────────────────────────────────────────
+// If user_id is provided: returns that user's recent searches (most recent first).
+// Falls back to globally popular searches for guests or when history is thin.
 export const searchSuggestions = async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT query, COUNT(*) AS count
-      FROM search_logs
-      GROUP BY query
-      ORDER BY count DESC
-      LIMIT 10
-    `);
+    const { user_id, limit = 8 } = req.query;
+    const n = Math.min(Number(limit), 20);
+ 
+    let rows;
+ 
+    if (user_id) {
+      // User's own recent distinct queries, most recent first
+      const result = await pool.query(
+        `SELECT DISTINCT ON (query) query, created_at
+         FROM search_logs
+         WHERE user_id = $1 AND query IS NOT NULL AND query <> ''
+         ORDER BY query, created_at DESC
+         LIMIT $2`,
+        [Number(user_id), n]
+      );
+      // Re-sort by recency after DISTINCT ON
+      rows = result.rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+ 
+      // If user has fewer than 3 personal results, pad with global popular
+      if (rows.length < 3) {
+        const existing = rows.map((r) => r.query);
+        const pad = await pool.query(
+          `SELECT query, COUNT(*) AS count
+           FROM search_logs
+           WHERE query IS NOT NULL AND query <> ''
+             ${existing.length ? `AND query NOT IN (${existing.map((_, i) => `$${i + 1}`).join(",")})` : ""}
+           GROUP BY query
+           ORDER BY count DESC
+           LIMIT $${existing.length + 1}`,
+          [...existing, n - rows.length]
+        );
+        rows = [...rows, ...pad.rows];
+      }
+    } else {
+      // Guest — return globally popular queries
+      const result = await pool.query(
+        `SELECT query, COUNT(*) AS count
+         FROM search_logs
+         WHERE query IS NOT NULL AND query <> ''
+         GROUP BY query
+         ORDER BY count DESC
+         LIMIT $1`,
+        [n]
+      );
+      rows = result.rows;
+    }
+ 
     res.status(200).json({
       success: true,
-      data: result.rows.map((r) => ({ query: r.query, count: Number(r.count) })),
+      data: rows.map((r) => ({ query: r.query })),
     });
   } catch (error) {
     console.error("Error in searchSuggestions:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
-};
+}
 
 // ─── GET /api/products/autocomplete ──────────────────────────────────────────
 export const autocomplete = async (req, res) => {

@@ -25,6 +25,7 @@ const NAV = [
   { to: "/admin/site-kpis",         label: "Site KPIs",         icon: "📊" },
   { to: "/admin/couriers",          label: "Couriers",          icon: "📦" },
   { to: "/admin/coupons",           label: "Coupons",           icon: "🏷" },
+  { to: "/admin/categories", label: "Categories", icon: "◎" },
 ];
 
 export default function AdminLayout() {
