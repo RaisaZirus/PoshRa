@@ -74,11 +74,11 @@ function ProductCard({ p, onAddToCart }) {
           <p style={{ fontSize: 11, color: COLORS.olive, margin: "0 0 6px" }}>{p.brand || "—"}</p>
           <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <span style={{ fontWeight: 900, fontSize: 15, color: COLORS.ink }}>
-              ₹{Number(price).toLocaleString("en-BD")}
+              ₹{Number(price).toLocaleString("en-IN")}
             </span>
             {hasDiscount && (
               <span style={{ fontSize: 11, color: "rgba(32,29,24,0.4)", textDecoration: "line-through" }}>
-                ₹{Number(original).toLocaleString("en-BD")}
+                ₹{Number(original).toLocaleString("en-IN")}
               </span>
             )}
           </div>
@@ -114,8 +114,6 @@ export default function SearchResultsPage() {
   const [inputValue, setInputValue] = React.useState(searchParams.get("q") || "");
   const [suggestions, setSuggestions] = React.useState([]);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
-  const [popularSearches, setPopularSearches] = React.useState([]);
-  const [popularLoading, setPopularLoading] = React.useState(false);
 
   const [minPrice, setMinPrice] = React.useState("");
   const [maxPrice, setMaxPrice] = React.useState("");
@@ -133,7 +131,7 @@ export default function SearchResultsPage() {
   const debounceRef = React.useRef(null);
   const currentQ = searchParams.get("q") || "";
 
-  // ── Fetch categories for filter dropdown ──────────────────────────────────
+  // ── Fetch categories once ─────────────────────────────────────────────────
   React.useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
@@ -141,14 +139,24 @@ export default function SearchResultsPage() {
       .catch(() => {});
   }, []);
 
+  // ── Load search history / popular suggestions when input is empty ─────────
   React.useEffect(() => {
-    setPopularLoading(true);
-    fetch("/api/products/search/suggestions")
+    const uid = user?.user_id ?? null;
+    const url = uid
+      ? `/api/products/search/suggestions?user_id=${uid}&limit=8`
+      : `/api/products/search/suggestions?limit=8`;
+    fetch(url)
       .then((r) => r.json())
-      .then((d) => setPopularSearches(d.data || []))
-      .catch(() => setPopularSearches([]))
-      .finally(() => setPopularLoading(false));
-  }, []);
+      .then((d) => {
+        // Store as history suggestions — shown when input is blank
+        setSuggestions((prev) => {
+          // Only update if input is currently empty so we don't clobber autocomplete
+          if (!inputValue.trim()) return (d.data || []).map((s) => ({ ...s, isHistory: true }));
+          return prev;
+        });
+      })
+      .catch(() => {});
+  }, [user?.user_id]); // re-fetch when user logs in/out
 
   // ── Fetch search results ───────────────────────────────────────────────────
   const runSearch = React.useCallback(async (q, filters, pg) => {
@@ -164,7 +172,8 @@ export default function SearchResultsPage() {
       if (filters.inStock)    params.set("in_stock", filters.inStock);
       if (filters.sort)       params.set("sort", filters.sort);
       if (filters.categoryId) params.set("category_id", filters.categoryId);
-      if (user?.userId)       params.set("user_id", user.userId);
+      // user.user_id is the correct field name (snake_case from DB row)
+      if (user?.user_id)      params.set("user_id", user.user_id);
 
       const res = await fetch(`/api/products/search?${params}`);
       const data = await res.json();
@@ -177,7 +186,7 @@ export default function SearchResultsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.userId]);
+  }, [user?.user_id]);
 
   // ── Run search when URL query changes ──────────────────────────────────────
   React.useEffect(() => {
@@ -185,19 +194,52 @@ export default function SearchResultsPage() {
     runSearch(currentQ, { minPrice, maxPrice, inStock, sort }, 1);
   }, [currentQ]); // only fires when URL changes
 
-  // ── Autocomplete ───────────────────────────────────────────────────────────
+  // ── Autocomplete — blends product-name matches with search history ─────────
   React.useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!inputValue.trim()) { setSuggestions([]); return; }
+
+    if (!inputValue.trim()) {
+      // Input cleared — reload history suggestions
+      const uid = user?.user_id ?? null;
+      const url = uid
+        ? `/api/products/search/suggestions?user_id=${uid}&limit=8`
+        : `/api/products/search/suggestions?limit=8`;
+      fetch(url)
+        .then((r) => r.json())
+        .then((d) => setSuggestions((d.data || []).map((s) => ({ ...s, isHistory: true }))))
+        .catch(() => setSuggestions([]));
+      return;
+    }
+
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products/search/autocomplete?q=${encodeURIComponent(inputValue)}`);
-        const data = await res.json();
-        setSuggestions(data.data || []);
+        // Fetch product-name autocomplete
+        const [autoRes, histRes] = await Promise.all([
+          fetch(`/api/products/search/autocomplete?q=${encodeURIComponent(inputValue)}`),
+          fetch(`/api/products/search/suggestions?user_id=${user?.user_id ?? ""}&limit=5`),
+        ]);
+        const autoData = await autoRes.json();
+        const histData = await histRes.json();
+
+        const autoItems = (autoData.data || []).map((s) => ({ query: s.name, isHistory: false }));
+        // Filter history to those that start with the current input
+        const histItems = (histData.data || [])
+          .filter((s) => s.query?.toLowerCase().startsWith(inputValue.toLowerCase()))
+          .map((s) => ({ ...s, isHistory: true }));
+
+        // Merge: history matches first, then product names, deduplicated
+        const seen = new Set();
+        const merged = [...histItems, ...autoItems].filter((s) => {
+          if (seen.has(s.query)) return false;
+          seen.add(s.query);
+          return true;
+        });
+
+        setSuggestions(merged.slice(0, 8));
       } catch { setSuggestions([]); }
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [inputValue]);
+  }, [inputValue, user?.user_id]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSearch = (e) => {
@@ -269,23 +311,30 @@ export default function SearchResultsPage() {
                   borderRadius: 12, zIndex: 30, overflow: "hidden",
                   boxShadow: "0 8px 24px rgba(32,29,24,0.1)",
                 }}>
+                  {!inputValue.trim() && (
+                    <p style={{ fontSize: 10, fontWeight: 800, color: COLORS.olive, letterSpacing: 1, textTransform: "uppercase", padding: "8px 14px 4px", margin: 0 }}>
+                      {user ? "Your recent searches" : "Popular searches"}
+                    </p>
+                  )}
                   {suggestions.map((s, i) => (
                     <button
                       key={i} type="button"
                       onMouseDown={() => {
-                        setInputValue(s.name);
+                        setInputValue(s.query);
                         setShowSuggestions(false);
-                        setSearchParams({ q: s.name });
+                        setSearchParams({ q: s.query });
                       }}
                       style={{
-                        width: "100%", textAlign: "left", padding: "10px 14px",
+                        width: "100%", textAlign: "left", padding: "9px 14px",
                         background: "none", border: "none", fontSize: 13,
-                        color: COLORS.ink, cursor: "pointer", display: "block",
+                        color: COLORS.ink, cursor: "pointer", display: "flex",
+                        alignItems: "center", gap: 8,
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.background = COLORS.soft}
                       onMouseLeave={(e) => e.currentTarget.style.background = "none"}
                     >
-                      🔍 {s.name}
+                      <span style={{ fontSize: 12, opacity: 0.6 }}>{s.isHistory ? "🕐" : "🔍"}</span>
+                      {s.query}
                     </button>
                   ))}
                 </div>
@@ -293,35 +342,6 @@ export default function SearchResultsPage() {
             </div>
             <button type="submit" style={s.btn(true)}>Search</button>
           </form>
-
-          {popularSearches.length > 0 && (
-            <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <span style={{ fontSize: 12, color: COLORS.olive, fontWeight: 700, alignSelf: "center" }}>
-                Popular searches:
-              </span>
-              {popularSearches.slice(0, 8).map((item, index) => (
-                <button
-                  key={`${item.query}-${index}`}
-                  type="button"
-                  onClick={() => {
-                    setInputValue(item.query);
-                    setSearchParams({ q: item.query });
-                  }}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(32,29,24,0.12)",
-                    background: COLORS.bg,
-                    color: COLORS.ink,
-                    fontSize: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  {item.query}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Filters */}
@@ -469,4 +489,3 @@ export default function SearchResultsPage() {
     </div>
   );
 }
-

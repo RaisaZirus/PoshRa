@@ -1159,3 +1159,5 @@ LEFT JOIN orders o          ON o.customer_id  = c.customer_id
 LEFT JOIN reviews r         ON r.customer_id  = c.customer_id
 GROUP BY c.customer_id, u.name, u.email, u.created_at
 ORDER BY lifetime_value DESC;
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee NUMERIC(12,2) NOT NULL DEFAULT 0;

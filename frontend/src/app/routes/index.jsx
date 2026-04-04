@@ -69,6 +69,7 @@ import AdminSiteKpisPage from "../../features/admin/pages/AdminSiteKpisPage.jsx"
 import AdminStoresPage from "../../features/admin/pages/AdminStoresPage.jsx";
 import AdminCouriersPage from "../../features/admin/pages/AdminCouriersPage.jsx";
 import AdminCouponsPage from "../../features/admin/pages/AdminCouponsPage.jsx";
+import AdminCategoriesPage from "../../features/admin/pages/AdminCategoriesPage.jsx";
 
 const router = createBrowserRouter([
   {
@@ -182,6 +183,7 @@ const router = createBrowserRouter([
       { path: "stores", element: <AdminStoresPage /> },
       { path: "couriers", element: <AdminCouriersPage /> },
       { path: "coupons", element: <AdminCouponsPage /> },
+      { path: "categories", element: <AdminCategoriesPage /> },
     ],
   },
 

@@ -510,7 +510,21 @@ router.get("/campaigns", async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
-
+//helper function for campaign notification
+async function sendCampaignNotifications(client, campaignId, campaignName) {
+  const message = `🎉 Campaign "${campaignName}" has started! Check out the deals now.`;
+  await client.query(
+    `INSERT INTO notifications (user_id, type, message)
+     SELECT user_id, 'campaign', $1
+     FROM users
+     WHERE is_active = true`,
+    [message]
+  );
+  await client.query(
+    `UPDATE campaigns SET notified_at = NOW() WHERE campaign_id = $1`,
+    [campaignId]
+  );
+}
 // ── POST /api/admin/campaigns ─────────────────────────────────────────────────
 // Explicit transaction: insert campaign + audit log
 router.post("/campaigns", async (req, res) => {
@@ -528,10 +542,15 @@ router.post("/campaigns", async (req, res) => {
       `INSERT INTO campaigns (name, start_time, end_time) VALUES ($1, $2, $3) RETURNING *`,
       [name, start_time, end_time]
     );
-    await logAudit(client, adminId, `Created campaign '${name}'`, "campaign", rows[0].campaign_id);
+   const campaign = rows[0];
+await logAudit(client, adminId, `Created campaign '${name}'`, "campaign", campaign.campaign_id);
 
-    await client.query("COMMIT");
-    res.status(201).json({ success: true, data: rows[0] });
+if (new Date(campaign.start_time) <= new Date()) {
+  await sendCampaignNotifications(client, campaign.campaign_id, campaign.name);
+}
+
+await client.query("COMMIT");
+res.status(201).json({ success: true, data: campaign });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("admin campaign create error:", err);
@@ -589,6 +608,37 @@ router.delete("/campaigns/:campaign_id", async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("admin campaign delete error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+// ── POST /api/admin/campaigns/:campaign_id/notify ─────────────────────────────
+router.post("/campaigns/:campaign_id/notify", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { campaign_id } = req.params;
+
+    const { rows } = await client.query(
+      `SELECT campaign_id, name FROM campaigns WHERE campaign_id = $1`,
+      [campaign_id]
+    );
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Campaign not found" });
+    }
+
+    const campaign = rows[0];
+    await sendCampaignNotifications(client, campaign.campaign_id, campaign.name);
+    await logAudit(client, adminId, `Sent notifications for campaign '${campaign.name}'`, "campaign", campaign.campaign_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: `Notifications sent for campaign '${campaign.name}'` });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("campaign notify error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   } finally {
     client.release();
@@ -733,7 +783,67 @@ router.get("/categories", async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
+// ── POST /api/admin/categories ────────────────────────────────────────────────
+router.post("/categories", async (req, res) => {
+  const { name, slug, parent_id } = req.body;
+  if (!name || !slug) {
+    return res.status(400).json({ success: false, message: "name and slug required" });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
 
+    const { rows } = await client.query(
+      `INSERT INTO categories (name, slug, parent_id)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [name, slug.toLowerCase().replace(/[^a-z0-9-]/g, "-"), parent_id || null]
+    );
+    await logAudit(client, adminId, `Created category '${name}'`, "category", rows[0].category_id);
+
+    await client.query("COMMIT");
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    if (err.code === "23505") {
+      return res.status(409).json({ success: false, message: "Slug already exists" });
+    }
+    console.error("admin category create error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// ── DELETE /api/admin/categories/:category_id ─────────────────────────────────
+router.delete("/categories/:category_id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const adminId = await getAdminId(req.user.userId);
+    const { category_id } = req.params;
+
+    const { rows } = await client.query(
+      `DELETE FROM categories WHERE category_id = $1 RETURNING name`,
+      [category_id]
+    );
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Category not found" });
+    }
+    await logAudit(client, adminId, `Deleted category '${rows[0].name}'`, "category", category_id);
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Category deleted" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("admin category delete error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    client.release();
+  }
+});
 // ── GET /api/admin/payouts ────────────────────────────────────────────────────
 router.get("/payouts", async (req, res) => {
   try {

@@ -54,6 +54,7 @@ export default function CheckoutPage() {
 
   // Addresses state
   const [addresses, setAddresses] = React.useState([]);
+  const [shippingFee, setShippingFee] = React.useState(0);
   const [selectedAddressId, setSelectedAddressId] = React.useState(null);
   const [addressLoading, setAddressLoading] = React.useState(true);
 
@@ -101,8 +102,10 @@ export default function CheckoutPage() {
           setAddresses(data.data || []);
           // auto-select default address
           const def = data.data?.find((a) => a.is_default);
-          if (def) setSelectedAddressId(def.address_id);
-          else if (data.data?.length > 0) setSelectedAddressId(data.data[0].address_id);
+          const initial = def || data.data[0];
+          setSelectedAddressId(initial.address_id);
+          const city = (initial.city || "").toLowerCase().trim();
+          setShippingFee(city === "dhaka" ? 60 : 120);
         }
       } catch (err) {
         console.error("Failed to load addresses:", err);
@@ -303,7 +306,11 @@ export default function CheckoutPage() {
                     return (
                       <div
                         key={a.address_id}
-                        onClick={() => setSelectedAddressId(a.address_id)}
+                        onClick={() => {
+                          setSelectedAddressId(a.address_id);
+                          const city = (a.city || "").toLowerCase().trim();
+                          setShippingFee(city === "dhaka" ? 60 : 120);
+                        }}
                         style={{
                           border: `2px solid ${selected ? COLORS.primary : "rgba(32,29,24,0.12)"}`,
                           borderRadius: 12,
@@ -485,7 +492,7 @@ export default function CheckoutPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                   <span>Shipping</span>
-                  <span style={{ color: "#16a34a", fontWeight: 700 }}>FREE</span>
+                  <span style={{ color: "#16a34a", fontWeight: 700 }}>৳{shippingFee}</span>
                 </div>
                 {couponApplied && coupon && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
@@ -497,7 +504,7 @@ export default function CheckoutPage() {
 
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 900, color: COLORS.ink, marginBottom: 20 }}>
                 <span>Total</span>
-                <span style={{ color: COLORS.primary }}>৳{payableTotal.toLocaleString("en-BD")}</span>
+                <span style={{ color: COLORS.primary }}>৳{(payableTotal + shippingFee).toLocaleString("en-BD")}</span>
               </div>
 
               {/* Error message */}

@@ -346,7 +346,7 @@ export default function CartPage() {
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
                     <span>Shipping</span>
-                    <span style={{ color: "#16a34a", fontWeight: 700 }}>FREE</span>
+                    <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 12 }}>Calculated at checkout</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive }}>
                     <span>Tax (0%)</span>
