@@ -114,6 +114,8 @@ export default function SearchResultsPage() {
   const [inputValue, setInputValue] = React.useState(searchParams.get("q") || "");
   const [suggestions, setSuggestions] = React.useState([]);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [popularSearches, setPopularSearches] = React.useState([]);
+  const [popularLoading, setPopularLoading] = React.useState(false);
 
   const [minPrice, setMinPrice] = React.useState("");
   const [maxPrice, setMaxPrice] = React.useState("");
@@ -139,6 +141,15 @@ export default function SearchResultsPage() {
       .catch(() => {});
   }, []);
 
+  React.useEffect(() => {
+    setPopularLoading(true);
+    fetch("/api/products/search/suggestions")
+      .then((r) => r.json())
+      .then((d) => setPopularSearches(d.data || []))
+      .catch(() => setPopularSearches([]))
+      .finally(() => setPopularLoading(false));
+  }, []);
+
   // ── Fetch search results ───────────────────────────────────────────────────
   const runSearch = React.useCallback(async (q, filters, pg) => {
     setLoading(true);
@@ -153,7 +164,7 @@ export default function SearchResultsPage() {
       if (filters.inStock)    params.set("in_stock", filters.inStock);
       if (filters.sort)       params.set("sort", filters.sort);
       if (filters.categoryId) params.set("category_id", filters.categoryId);
-      if (user?.user_Id)       params.set("user_id", user.user_Id);
+      if (user?.userId)       params.set("user_id", user.userId);
 
       const res = await fetch(`/api/products/search?${params}`);
       const data = await res.json();
@@ -282,6 +293,35 @@ export default function SearchResultsPage() {
             </div>
             <button type="submit" style={s.btn(true)}>Search</button>
           </form>
+
+          {popularSearches.length > 0 && (
+            <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <span style={{ fontSize: 12, color: COLORS.olive, fontWeight: 700, alignSelf: "center" }}>
+                Popular searches:
+              </span>
+              {popularSearches.slice(0, 8).map((item, index) => (
+                <button
+                  key={`${item.query}-${index}`}
+                  type="button"
+                  onClick={() => {
+                    setInputValue(item.query);
+                    setSearchParams({ q: item.query });
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(32,29,24,0.12)",
+                    background: COLORS.bg,
+                    color: COLORS.ink,
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                >
+                  {item.query}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Filters */}
