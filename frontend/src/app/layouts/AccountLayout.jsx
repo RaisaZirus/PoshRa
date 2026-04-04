@@ -27,7 +27,6 @@ export default function AccountLayout() {
           <NavLink to="/orders" style={({ isActive }) => ({ ...itemStyle, ...(isActive ? activeItemStyle : {}) })}>Orders</NavLink>
           <NavLink to="/account/wishlists" style={({ isActive }) => ({ ...itemStyle, ...(isActive ? activeItemStyle : {}) })}>Wishlists</NavLink>
           <NavLink to="/account/notifications" style={({ isActive }) => ({ ...itemStyle, ...(isActive ? activeItemStyle : {}) })}>Notifications</NavLink>
-          <NavLink to="/account/conversations" style={({ isActive }) => ({ ...itemStyle, ...(isActive ? activeItemStyle : {}) })}>Conversations</NavLink>
         </div>
       </aside>
 

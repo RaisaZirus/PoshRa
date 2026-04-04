@@ -474,9 +474,16 @@ export default function CheckoutPage() {
               {couponError && (
                 <p style={{ fontSize: 12, color: "#dc2626", marginTop: 6, fontWeight: 700 }}>{couponError}</p>
               )}
-              <p style={{ fontSize: 11, color: COLORS.olive, marginTop: 8 }}>
-                Coupon discount will be applied at checkout.
-              </p>
+              {!couponApplied && (
+                <p style={{ fontSize: 11, color: COLORS.olive, marginTop: 8 }}>
+                  Enter a coupon code to get a discount.
+                </p>
+              )}
+              {couponApplied && coupon && (
+                <p style={{ fontSize: 11, color: "#16a34a", marginTop: 8, fontWeight: 700 }}>
+                  ✓ Discount of ৳{discountAmount.toLocaleString("en-BD")} applied!
+                </p>
+              )}
             </Card>
           </div>
 

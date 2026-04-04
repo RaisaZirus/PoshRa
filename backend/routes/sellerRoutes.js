@@ -53,10 +53,10 @@ router.get("/dashboard", async (req, res) => {
   try {
     const sellerId = await getSellerId(req.user.userId);
 
-    const [ordersRes, revenueRes, productsRes, pendingRes] = await Promise.all([
+    const [ordersRes, revenueRes, productsRes, pendingRes, commissionsRes] = await Promise.all([
       pool.query(`SELECT COUNT(*)::int AS total FROM seller_orders WHERE seller_id = $1`, [sellerId]),
       pool.query(
-        `SELECT COALESCE(SUM(subtotal), 0)::numeric AS total_revenue
+        `SELECT COALESCE(SUM(subtotal - commission_total), 0)::numeric AS total_revenue
          FROM seller_orders WHERE seller_id = $1 AND status = 'delivered'`,
         [sellerId]
       ),
@@ -69,6 +69,11 @@ router.get("/dashboard", async (req, res) => {
       pool.query(
         `SELECT COUNT(*)::int AS total FROM seller_orders
          WHERE seller_id = $1 AND status = 'pending'`,
+        [sellerId]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(commission_total), 0)::numeric AS total_commissions
+         FROM seller_orders WHERE seller_id = $1 AND status = 'delivered'`,
         [sellerId]
       ),
     ]);
@@ -90,6 +95,7 @@ router.get("/dashboard", async (req, res) => {
         stats: {
           total_orders:    ordersRes.rows[0].total,
           total_revenue:   revenueRes.rows[0].total_revenue,
+          total_commissions: commissionsRes.rows[0].total_commissions,
           active_products: productsRes.rows[0].total,
           pending_orders:  pendingRes.rows[0].total,
         },
@@ -109,7 +115,7 @@ router.get("/orders", async (req, res) => {
     const { status } = req.query;
 
     let query = `
-      SELECT so.seller_order_id, so.order_id, so.subtotal, so.status, so.created_at,
+      SELECT so.seller_order_id, so.order_id, so.subtotal, so.commission_total, so.status, so.created_at,
              o.payment_status,
              COUNT(oi.order_item_id)::int AS item_count,
              sh.tracking_number, sh.status AS shipment_status
@@ -601,7 +607,7 @@ router.get("/payouts", async (req, res) => {
     );
 
     const { rows: earningsRows } = await pool.query(
-      `SELECT COALESCE(SUM(subtotal), 0)::numeric AS total_earned
+      `SELECT COALESCE(SUM(subtotal - commission_total), 0)::numeric AS total_earned
        FROM seller_orders
        WHERE seller_id = $1 AND status = 'delivered'`,
       [sellerId]
@@ -1017,27 +1023,46 @@ router.patch("/returns/:return_id", async (req, res) => {
         [ret.quantity, ret.variant_id]
       );
 
-      // Calculate refund amount accounting for coupon discounts
-      let refundAmount = Number(ret.price) * ret.quantity;
-      
-      // Check if order had a coupon applied
-      const { rows: couponRows } = await client.query(
-        `SELECT oc.applied_amount, o.total_amount 
-         FROM order_coupons oc 
-         JOIN orders o ON o.order_id = oc.order_id 
-         WHERE oc.order_id = $1`,
+      // Calculate refund amount - customer gets exactly what they paid for this item (no shipping refund)
+      let refundAmount = 0;
+
+      // Get order details including shipping
+      const { rows: orderRows } = await client.query(
+        `SELECT o.total_amount, o.shipping_fee,
+                COALESCE(oc.applied_amount, 0) as coupon_discount
+         FROM orders o
+         LEFT JOIN order_coupons oc ON oc.order_id = o.order_id
+         WHERE o.order_id = $1`,
         [ret.order_id]
       );
-      
-      if (couponRows.length > 0) {
-        const couponDiscount = Number(couponRows[0].applied_amount);
-        const orderTotal = Number(couponRows[0].total_amount);
-        const originalTotal = orderTotal + couponDiscount;
-        
-        // Calculate proportional discount for this item
-        const discountRatio = couponDiscount / originalTotal;
-        const itemDiscount = (Number(ret.price) * ret.quantity) * discountRatio;
-        refundAmount = refundAmount - itemDiscount;
+
+      if (orderRows.length > 0) {
+        const orderTotal = Number(orderRows[0].total_amount); // Includes shipping
+        const shippingFee = Number(orderRows[0].shipping_fee);
+        const couponDiscount = Number(orderRows[0].coupon_discount);
+
+        // Amount customer paid for items only (excluding shipping)
+        const itemsPaid = orderTotal - shippingFee;
+
+        // Get total value of all items in the order (before any discounts)
+        const { rows: allItemsRows } = await client.query(
+          `SELECT COALESCE(SUM(oi.price * oi.quantity), 0) as total_item_value
+           FROM order_items oi
+           JOIN seller_orders so ON so.seller_order_id = oi.seller_order_id
+           WHERE so.order_id = $1`,
+          [ret.order_id]
+        );
+
+        const totalItemValue = Number(allItemsRows[0]?.total_item_value || 0);
+
+        if (totalItemValue > 0) {
+          // Calculate what percentage this returned item represents
+          const itemValue = Number(ret.price) * ret.quantity;
+          const itemPercentage = itemValue / totalItemValue;
+
+          // Refund that percentage of what customer paid for items
+          refundAmount = itemsPaid * itemPercentage;
+        }
       }
 
       // Get payment information for refund
@@ -1059,13 +1084,49 @@ router.patch("/returns/:return_id", async (req, res) => {
       // Send refund notification to customer
       await client.query(
         `INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`,
-        [ret.user_id, `Your refund of ₹${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed.`]
+        [ret.user_id, `Your refund of ₹${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed. Note: Shipping fees are not refunded.`]
       );
+
+      // Normalize numeric values for safe commission calculation
+      const returnedPrice = Number(ret.price);
+      const returnedQuantity = Number(ret.quantity);
+
+      // Calculate commission for the returned item before deleting it
+      const { rows: commissionRows } = await client.query(`
+        SELECT
+          CASE
+            WHEN cr.percentage IS NOT NULL THEN ROUND(($1::numeric * $2::numeric * cr.percentage / 100), 2)
+            ELSE ROUND(($1::numeric * $2::numeric * 8.50 / 100), 2) -- fallback to global rate
+          END as item_commission
+        FROM product_variants pv
+        JOIN products p ON p.product_id = pv.product_id
+        LEFT JOIN commissions cr ON cr.category_id = p.category_id
+        WHERE pv.variant_id = $3
+      `, [returnedPrice, returnedQuantity, ret.variant_id]);
+
+      const itemCommission = Number(commissionRows[0]?.item_commission || 0);
 
       await client.query(
         `DELETE FROM order_items WHERE order_item_id = $1`,
         [ret.order_item_id]
       );
+
+      // Reverse commission from admin earnings if the order was paid
+      if (itemCommission > 0) {
+        // Delete admin earnings for this specific item (if it exists)
+        await client.query(`
+          DELETE FROM admin_earnings
+          WHERE order_id = $1 AND seller_order_id = $2
+          AND commission_amount = $3
+        `, [ret.order_id, ret.seller_order_id, itemCommission]);
+
+        // Update finance KPIs to subtract the commission
+        await client.query(`
+          UPDATE finance_kpis_daily
+          SET commission_total = GREATEST(0, commission_total - $1)
+          WHERE kpi_date = CURRENT_DATE
+        `, [itemCommission]);
+      }
 
       const { rows: remaining } = await client.query(
         `SELECT COUNT(*)::int AS cnt FROM order_items WHERE seller_order_id = $1`,
@@ -1074,7 +1135,7 @@ router.patch("/returns/:return_id", async (req, res) => {
 
       if (remaining[0].cnt === 0) {
         await client.query(
-          `UPDATE seller_orders SET status = 'cancelled' WHERE seller_order_id = $1`,
+          `UPDATE seller_orders SET status = 'cancelled', commission_total = 0 WHERE seller_order_id = $1`,
           [ret.seller_order_id]
         );
         await client.query(
@@ -1088,14 +1149,22 @@ router.patch("/returns/:return_id", async (req, res) => {
           [ret.order_id]
         );
       } else {
+        // Recalculate commission for remaining items
+        const { rows: newCommissionRows } = await client.query(`
+          SELECT fn_calculate_commission($1) as new_commission
+        `, [ret.seller_order_id]);
+
+        const newCommission = Number(newCommissionRows[0]?.new_commission || 0);
+
         await client.query(
           `UPDATE seller_orders
            SET subtotal = (
              SELECT COALESCE(SUM(price * quantity), 0)
              FROM order_items WHERE seller_order_id = $1
-           )
+           ),
+           commission_total = $2
            WHERE seller_order_id = $1`,
-          [ret.seller_order_id]
+          [ret.seller_order_id, newCommission]
         );
       }
     }

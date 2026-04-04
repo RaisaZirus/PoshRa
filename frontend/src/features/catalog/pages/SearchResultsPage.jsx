@@ -340,7 +340,7 @@ export default function SearchResultsPage() {
                 </div>
               )}
             </div>
-            <button type="submit" style={s.btn(true)}>Search</button>
+            <button type="submit" style={{ ...s.btn(true), marginLeft: 4 }}>Search</button>
           </form>
         </div>
 

@@ -37,8 +37,6 @@ import ProfilePage from "../../features/account/pages/ProfilePage.jsx";
 import AddressesPage from "../../features/account/pages/AddressesPage.jsx";
 import WishlistsPage from "../../features/account/pages/WishlistsPage.jsx";
 import NotificationsPage from "../../features/account/pages/NotificationsPage.jsx";
-import ConversationsPage from "../../features/account/pages/ConversationsPage.jsx";
-import ConversationThreadPage from "../../features/account/pages/ConversationThreadPage.jsx";
 
 // Seller
 import SellerDashboardPage from "../../features/seller/pages/SellerDashboardPage.jsx";
@@ -105,11 +103,6 @@ const router = createBrowserRouter([
               { path: "addresses", element: <AddressesPage /> },
               { path: "wishlists", element: <WishlistsPage /> },
               { path: "notifications", element: <NotificationsPage /> },
-              { path: "conversations", element: <ConversationsPage /> },
-              {
-                path: "conversations/:conversation_id",
-                element: <ConversationThreadPage />,
-              },
             ],
           },
         ],
