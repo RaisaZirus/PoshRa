@@ -123,12 +123,12 @@ export default function NotificationsPage() {
               key={n.notification_id}
               onClick={() => !n.is_read && markRead(n.notification_id)}
               style={{
-                background: n.is_read ? COLORS.bg : "rgba(254,227,43,0.1)",
-                border: `1px solid ${n.is_read ? "rgba(32,29,24,0.1)" : COLORS.primary}`,
+                background: n.is_read ? "#FFFFFF" : COLORS.bg,
+                border: `1px solid ${n.is_read ? COLORS.primary : "#dc2626"}`,
                 borderRadius: 12, padding: "14px 16px",
                 display: "flex", gap: 12, alignItems: "flex-start",
                 cursor: n.is_read ? "default" : "pointer",
-                transition: "background 0.15s",
+                transition: "background 0.15s, border-color 0.15s",
               }}
             >
               <span style={{ fontSize: 20, flexShrink: 0 }}>
@@ -151,7 +151,7 @@ export default function NotificationsPage() {
               {!n.is_read && (
                 <div style={{
                   width: 8, height: 8, borderRadius: "50%",
-                  background: COLORS.primary, flexShrink: 0, marginTop: 4,
+                  background: "#dc2626", flexShrink: 0, marginTop: 4,
                 }} />
               )}
             </div>

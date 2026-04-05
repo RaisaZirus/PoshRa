@@ -83,7 +83,7 @@ async function run() {
     }
 
     console.log('insert notification');
-    await client.query(`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`, [ret.user_id, `Your refund of ₹${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed. Note: Shipping fees are not refunded.`]);
+    await client.query(`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`, [ret.user_id, `Your refund of ৳${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed. Note: Shipping fees are not refunded.`]);
 
     const returnedPrice = Number(ret.price);
     const returnedQuantity = Number(ret.quantity);

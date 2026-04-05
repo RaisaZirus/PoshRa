@@ -84,7 +84,7 @@ async function run() {
       await client.query(`INSERT INTO refunds (payment_id, amount, status) VALUES ($1, $2, 'processed')`, [paymentRows[0].payment_id, refundAmount]);
     }
 
-    await client.query(`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`, [ret.user_id, `Your refund of ₹${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed. Note: Shipping fees are not refunded.`]);
+    await client.query(`INSERT INTO notifications (user_id, type, message) VALUES ($1, 'refund', $2)`, [ret.user_id, `Your refund of ৳${refundAmount.toFixed(2)} for "${ret.product_name}" has been processed. Note: Shipping fees are not refunded.`]);
 
     const commissionRows = await client.query(`
       SELECT
