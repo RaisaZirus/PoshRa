@@ -26,7 +26,7 @@ function Card({ children, style }) {
 
 function Metric({ label, value, format = 'number' }) {
   const fmt = (v) => {
-    if (format === 'currency') return `₹${Number(v).toLocaleString("en-IN")}`;
+    if (format === 'currency') return `৳${Number(v).toLocaleString("en-IN")}`;
     if (format === 'date') return new Date(v).toLocaleDateString();
     return v.toLocaleString();
   };
@@ -248,9 +248,9 @@ export default function AdminSiteKpisPage() {
                   <td style={{ padding: "12px 10px", textAlign: "right" }}>{kpi.new_users.toLocaleString()}</td>
                   <td style={{ padding: "12px 10px", textAlign: "right" }}>{kpi.new_sellers.toLocaleString()}</td>
                   <td style={{ padding: "12px 10px", textAlign: "right" }}>{kpi.total_orders.toLocaleString()}</td>
-                  <td style={{ padding: "12px 10px", textAlign: "right" }}>₹{Number(kpi.gross_merch_value).toLocaleString("en-IN")}</td>
-                  <td style={{ padding: "12px 10px", textAlign: "right" }}>₹{Number(kpi.net_revenue).toLocaleString("en-IN")}</td>
-                  <td style={{ padding: "12px 10px", textAlign: "right" }}>₹{Number(kpi.refunds_total).toLocaleString("en-IN")}</td>
+                  <td style={{ padding: "12px 10px", textAlign: "right" }}>৳{Number(kpi.gross_merch_value).toLocaleString("en-IN")}</td>
+                  <td style={{ padding: "12px 10px", textAlign: "right" }}>৳{Number(kpi.net_revenue).toLocaleString("en-IN")}</td>
+                  <td style={{ padding: "12px 10px", textAlign: "right" }}>৳{Number(kpi.refunds_total).toLocaleString("en-IN")}</td>
                 </tr>
               ))}
             </tbody>

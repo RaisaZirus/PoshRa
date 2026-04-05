@@ -3,70 +3,1035 @@ import { useParams, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth.jsx";
 
 const COLORS = {
-  bg: "#FDFDF9",
-  soft: "#FBEF9C",
-  primary: "#FEE32B",
-  olive: "#877928",
-  ink: "#201D18",
+  bg: "#fffdf7",
+  surface: "rgba(255,255,255,0.76)",
+  surfaceStrong: "#ffffff",
+  soft: "#fff4b8",
+  primary: "#fee32b",
+  primaryDeep: "#f2c400",
+  accent: "#8b7a23",
+  ink: "#1e1b16",
+  muted: "#6f6655",
+  line: "rgba(30,27,22,0.10)",
+  lineStrong: "rgba(30,27,22,0.16)",
+  success: "#16a34a",
+  danger: "#dc2626",
+  shadow: "0 18px 50px rgba(32,29,24,0.10)",
+  shadowHover: "0 28px 70px rgba(32,29,24,0.16)",
 };
 
-function Card({ children, style }) {
+const STATUS_COLORS = {
+  pending: { bg: "#FEF3C7", text: "#92400E" },
+  processing: { bg: "#DBEAFE", text: "#1D4ED8" },
+  shipped: { bg: "#E0F2FE", text: "#0369A1" },
+  delivered: { bg: "#DCFCE7", text: "#166534" },
+  cancelled: { bg: "#FEE2E2", text: "#991B1B" },
+  returned: { bg: "#F3F4F6", text: "#374151" },
+  paid: { bg: "#DCFCE7", text: "#166534" },
+  failed: { bg: "#FEE2E2", text: "#991B1B" },
+  refunded: { bg: "#F3F4F6", text: "#374151" },
+};
+
+const PAGE_CSS = `
+  * { box-sizing: border-box; }
+
+  .od-page {
+    min-height: 100vh;
+    color: ${COLORS.ink};
+    background:
+      radial-gradient(circle at top left, rgba(254,227,43,0.28), transparent 26%),
+      radial-gradient(circle at top right, rgba(251,239,156,0.32), transparent 24%),
+      linear-gradient(180deg, #fffdf7 0%, #fff9dd 42%, #fffdf7 100%);
+    position: relative;
+    overflow: hidden;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .od-page::before,
+  .od-page::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(30px);
+    pointer-events: none;
+    opacity: 0.65;
+    animation: odFloat 10s ease-in-out infinite;
+  }
+
+  .od-page::before {
+    width: 320px;
+    height: 320px;
+    background: rgba(254,227,43,0.18);
+    top: -100px;
+    left: -80px;
+  }
+
+  .od-page::after {
+    width: 360px;
+    height: 360px;
+    background: rgba(139,122,35,0.10);
+    bottom: -120px;
+    right: -80px;
+    animation-delay: -4s;
+  }
+
+  .od-shell {
+    width: min(1320px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 32px 0 64px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .od-successBanner,
+  .od-card,
+  .od-hero {
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .od-hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.55);
+    border-radius: 28px;
+    padding: 28px;
+    margin-bottom: 28px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.80) 0%, rgba(255,255,255,0.60) 100%),
+      linear-gradient(135deg, rgba(254,227,43,0.18), rgba(255,255,255,0));
+    box-shadow: ${COLORS.shadow};
+    animation: odFadeUp .7s ease both;
+  }
+
+  .od-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(120deg, transparent 10%, rgba(255,255,255,0.55) 28%, transparent 45%);
+    transform: translateX(-120%);
+    animation: odSweep 5.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .od-heroTop {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .od-breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: ${COLORS.accent};
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    transition: transform .18s ease, color .18s ease;
+  }
+
+  .od-breadcrumb:hover {
+    color: ${COLORS.ink};
+    transform: translateX(-2px);
+  }
+
+  .od-orderTitle {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.05;
+    font-weight: 950;
+    letter-spacing: -0.03em;
+  }
+
+  .od-orderMeta {
+    margin: 10px 0 0;
+    color: ${COLORS.muted};
+    font-size: 14px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .od-metaPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.65);
+    border: 1px solid ${COLORS.line};
+    font-weight: 700;
+    color: ${COLORS.ink};
+  }
+
+  .od-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .od-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--badge-bg);
+    color: var(--badge-text);
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45);
+  }
+
+  .od-badgeDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.20);
+  }
+
+  .od-btn,
+  .od-linkBtn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 18px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease, opacity .18s ease;
+    border: 1.5px solid transparent;
+  }
+
+  .od-btn:hover,
+  .od-linkBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px rgba(32,29,24,0.14);
+  }
+
+  .od-btn:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .od-btnPrimary,
+  .od-linkBtnPrimary {
+    background: linear-gradient(180deg, ${COLORS.primary} 0%, ${COLORS.primaryDeep} 100%);
+    color: ${COLORS.ink};
+    border-color: rgba(32,29,24,0.12);
+  }
+
+  .od-btnGhost,
+  .od-linkBtnGhost {
+    background: rgba(255,255,255,0.70);
+    color: ${COLORS.accent};
+    border-color: rgba(139,122,35,0.22);
+  }
+
+  .od-btnDanger,
+  .od-linkBtnDanger {
+    background: rgba(255,255,255,0.72);
+    color: ${COLORS.danger};
+    border-color: rgba(220,38,38,0.22);
+  }
+
+  .od-btn::before,
+  .od-linkBtn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 20%, rgba(255,255,255,0.55) 40%, transparent 60%);
+    transform: translateX(-120%);
+    transition: transform .55s ease;
+  }
+
+  .od-btn:hover::before,
+  .od-linkBtn:hover::before {
+    transform: translateX(120%);
+  }
+
+  .od-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.9fr) minmax(320px, 0.95fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .od-main,
+  .od-side {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .od-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    background: ${COLORS.surface};
+    border: 1px solid rgba(255,255,255,0.55);
+    box-shadow: ${COLORS.shadow};
+    transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    animation: odFadeUp .7s ease both;
+  }
+
+  .od-card:hover {
+    transform: translateY(-4px);
+    box-shadow: ${COLORS.shadowHover};
+    border-color: rgba(255,255,255,0.80);
+  }
+
+  .od-cardInner {
+    padding: 22px;
+  }
+
+  .od-cardGlow {
+    position: absolute;
+    inset: auto -30px -45px auto;
+    width: 180px;
+    height: 180px;
+    background: radial-gradient(circle, rgba(254,227,43,0.20), transparent 62%);
+    pointer-events: none;
+  }
+
+  .od-sectionTitleWrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .od-sectionTitle {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 950;
+    color: ${COLORS.ink};
+    text-transform: uppercase;
+    letter-spacing: .16em;
+  }
+
+  .od-sectionHint {
+    color: ${COLORS.muted};
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .od-sellerHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding-bottom: 16px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid ${COLORS.line};
+  }
+
+  .od-sellerName {
+    margin: 0 0 5px;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+
+  .od-sellerSub {
+    margin: 0;
+    color: ${COLORS.muted};
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .od-subOrderMeta {
+    display: inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .od-miniPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.70);
+    border: 1px solid ${COLORS.line};
+    color: ${COLORS.ink};
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .od-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .od-itemRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid ${COLORS.line};
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.52) 100%);
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+
+  .od-itemRow:hover {
+    transform: translateY(-2px);
+    border-color: rgba(32,29,24,0.16);
+    box-shadow: 0 14px 28px rgba(32,29,24,0.08);
+  }
+
+  .od-itemLeft {
+    min-width: 0;
+  }
+
+  .od-itemTitle {
+    margin: 0 0 7px;
+    font-size: 15px;
+    font-weight: 850;
+    color: ${COLORS.ink};
+  }
+
+  .od-itemMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .od-itemMetaText {
+    color: ${COLORS.muted};
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .od-itemPriceWrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .od-price {
+    font-size: 16px;
+    font-weight: 950;
+    color: ${COLORS.ink};
+    letter-spacing: -0.02em;
+  }
+
+  .od-campaignText {
+    font-size: 11px;
+    color: ${COLORS.success};
+    font-weight: 800;
+  }
+
+  .od-divider {
+    height: 1px;
+    background: ${COLORS.line};
+    margin: 18px 0 14px;
+  }
+
+  .od-totalRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+  }
+
+  .od-totalLabel {
+    color: ${COLORS.muted};
+    font-weight: 700;
+  }
+
+  .od-totalValue {
+    color: ${COLORS.ink};
+    font-weight: 950;
+    font-size: 16px;
+  }
+
+  .od-shipment {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 20px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.66) 0%, rgba(255,255,255,0.48) 100%);
+    border: 1px solid ${COLORS.line};
+  }
+
+  .od-shipmentTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .od-shipmentTitle {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: ${COLORS.accent};
+  }
+
+  .od-shipmentMeta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px 12px;
+    margin-top: 14px;
+  }
+
+  .od-shipBox {
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid ${COLORS.line};
+  }
+
+  .od-shipLabel {
+    margin: 0 0 4px;
+    color: ${COLORS.muted};
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+
+  .od-shipValue {
+    margin: 0;
+    color: ${COLORS.ink};
+    font-size: 13px;
+    font-weight: 900;
+    word-break: break-word;
+  }
+
+  .od-track {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .od-trackStep {
+    position: relative;
+    padding-top: 2px;
+  }
+
+  .od-trackStep:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 13px;
+    left: calc(50% + 12px);
+    width: calc(100% - 24px);
+    height: 2px;
+    background: rgba(30,27,22,0.08);
+  }
+
+  .od-trackStep.isDone:not(:last-child)::after {
+    background: linear-gradient(90deg, ${COLORS.success}, #4ade80);
+  }
+
+  .od-trackCircle {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    margin: 0 auto 8px;
+    border: 2px solid rgba(30,27,22,0.12);
+    background: rgba(255,255,255,0.90);
+    transition: all .22s ease;
+  }
+
+  .od-trackStep.isDone .od-trackCircle,
+  .od-trackStep.isCurrent .od-trackCircle {
+    background: linear-gradient(180deg, ${COLORS.primary}, ${COLORS.primaryDeep});
+    border-color: rgba(30,27,22,0.12);
+    box-shadow: 0 0 0 7px rgba(254,227,43,0.16);
+  }
+
+  .od-trackStep.isDone .od-trackCircle {
+    background: linear-gradient(180deg, #4ade80, ${COLORS.success});
+  }
+
+  .od-trackText {
+    text-align: center;
+  }
+
+  .od-trackLabel {
+    display: block;
+    font-size: 12px;
+    font-weight: 850;
+    color: ${COLORS.ink};
+  }
+
+  .od-trackSub {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    color: ${COLORS.muted};
+  }
+
+  .od-infoStack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .od-infoRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .od-infoLabel {
+    color: ${COLORS.muted};
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .od-infoValue {
+    color: ${COLORS.ink};
+    font-size: 13px;
+    font-weight: 850;
+    text-align: right;
+  }
+
+  .od-summarySplit {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid ${COLORS.line};
+  }
+
+  .od-moneyRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+
+  .od-moneyRow:last-child {
+    margin-bottom: 0;
+  }
+
+  .od-moneyLabel {
+    color: ${COLORS.muted};
+    font-weight: 700;
+  }
+
+  .od-moneyValue {
+    color: ${COLORS.ink};
+    font-weight: 900;
+    text-align: right;
+  }
+
+  .od-moneyValue.isGreen {
+    color: ${COLORS.success};
+  }
+
+  .od-grandTotal {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed rgba(30,27,22,0.12);
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+  }
+
+  .od-grandTotalLabel {
+    font-size: 14px;
+    font-weight: 900;
+    color: ${COLORS.ink};
+  }
+
+  .od-grandTotalValue {
+    font-size: 22px;
+    font-weight: 950;
+    color: ${COLORS.ink};
+    letter-spacing: -0.03em;
+  }
+
+  .od-couponBox {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(22,163,74,0.08);
+    border: 1px solid rgba(22,163,74,0.12);
+    color: ${COLORS.success};
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .od-addressTitle {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+
+  .od-addressText {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: ${COLORS.muted};
+    font-weight: 600;
+  }
+
+  .od-sticky {
+    position: sticky;
+    top: 24px;
+  }
+
+  .od-successBanner {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 22px;
+    border-radius: 22px;
+    border: 1px solid rgba(22,163,74,0.20);
+    background: linear-gradient(135deg, rgba(220,252,231,0.94), rgba(240,253,244,0.86));
+    box-shadow: 0 16px 36px rgba(22,163,74,0.12);
+    animation: odSlideDown .6s ease both;
+  }
+
+  .od-successBannerInner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+  }
+
+  .od-successIcon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(180deg, #34d399, #16a34a);
+    color: white;
+    font-size: 22px;
+    box-shadow: 0 12px 24px rgba(22,163,74,0.22);
+    animation: odPulse 2.4s ease-in-out infinite;
+  }
+
+  .od-successTitle {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 950;
+    color: #166534;
+  }
+
+  .od-successText {
+    margin: 5px 0 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #166534;
+  }
+
+  .od-errorText {
+    margin-top: 10px;
+    color: ${COLORS.danger};
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .od-stateWrap {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at top left, rgba(254,227,43,0.22), transparent 26%),
+      linear-gradient(180deg, #fffdf7 0%, #fff9dd 100%);
+  }
+
+  .od-stateCard {
+    width: min(460px, 100%);
+    text-align: center;
+  }
+
+  .od-stateEmoji {
+    font-size: 54px;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+
+  .od-stateTitle {
+    margin: 0 0 10px;
+    font-size: 22px;
+    font-weight: 950;
+    letter-spacing: -0.03em;
+  }
+
+  .od-stateText {
+    margin: 0 0 20px;
+    font-size: 14px;
+    color: ${COLORS.muted};
+    font-weight: 700;
+    line-height: 1.6;
+  }
+
+  .od-loadingGrid {
+    width: min(1080px, calc(100% - 32px));
+    display: grid;
+    grid-template-columns: 1.6fr .9fr;
+    gap: 24px;
+  }
+
+  .od-skeletonCard {
+    border-radius: 24px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(255,255,255,0.65);
+    box-shadow: ${COLORS.shadow};
+    padding: 22px;
+  }
+
+  .od-skeletonLine {
+    position: relative;
+    overflow: hidden;
+    border-radius: 999px;
+    height: 12px;
+    background: rgba(30,27,22,0.06);
+    margin-bottom: 12px;
+  }
+
+  .od-skeletonLine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.85), transparent);
+    animation: odShimmer 1.3s infinite;
+  }
+
+  .od-skeletonLine:last-child {
+    margin-bottom: 0;
+  }
+
+  .od-skeletonLine.w40 { width: 40%; }
+  .od-skeletonLine.w50 { width: 50%; }
+  .od-skeletonLine.w60 { width: 60%; }
+  .od-skeletonLine.w80 { width: 80%; }
+  .od-skeletonLine.w100 { width: 100%; }
+  .od-skeletonSpacer { height: 22px; }
+
+  @keyframes odFadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes odSlideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes odFloat {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(20px); }
+  }
+
+  @keyframes odSweep {
+    0%, 20% { transform: translateX(-120%); }
+    50%, 100% { transform: translateX(120%); }
+  }
+
+  @keyframes odPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 12px 24px rgba(22,163,74,0.22); }
+    50% { transform: scale(1.04); box-shadow: 0 14px 28px rgba(22,163,74,0.30); }
+  }
+
+  @keyframes odShimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  @media (max-width: 1100px) {
+    .od-grid,
+    .od-loadingGrid {
+      grid-template-columns: 1fr;
+    }
+    .od-sticky {
+      position: static;
+      top: unset;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .od-shell {
+      width: min(100% - 18px, 100%);
+      padding-top: 18px;
+      padding-bottom: 40px;
+    }
+
+    .od-hero,
+    .od-cardInner {
+      padding: 18px;
+    }
+
+    .od-successBannerInner {
+      padding: 16px;
+    }
+
+    .od-track {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .od-trackStep:not(:last-child)::after {
+      display: none;
+    }
+
+    .od-shipmentMeta {
+      grid-template-columns: 1fr;
+    }
+
+    .od-itemRow {
+      grid-template-columns: 1fr;
+      align-items: flex-start;
+    }
+
+    .od-itemPriceWrap {
+      justify-content: flex-start;
+    }
+
+    .od-sellerHeader,
+    .od-heroTop,
+    .od-infoRow,
+    .od-totalRow,
+    .od-moneyRow,
+    .od-grandTotal {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .od-infoValue {
+      text-align: left;
+    }
+
+    .od-actions {
+      justify-content: flex-start;
+    }
+  }
+`;
+
+function Card({ children, style, className = "" }) {
   return (
-    <div style={{
-      background: COLORS.bg,
-      border: `1px solid rgba(32,29,24,0.12)`,
-      borderRadius: 16,
-      boxShadow: "0 10px 26px rgba(32,29,24,0.08)",
-      overflow: "hidden",
-      ...style,
-    }}>
+    <div className={`od-card ${className}`} style={style}>
+      <div className="od-cardGlow" />
       {children}
     </div>
   );
 }
 
-function SectionTitle({ children }) {
+function SectionTitle({ children, hint }) {
   return (
-    <h2 style={{
-      fontSize: 13, fontWeight: 900, color: COLORS.ink,
-      letterSpacing: 0.5, marginBottom: 16, textTransform: "uppercase",
-    }}>
-      {children}
-    </h2>
+    <div className="od-sectionTitleWrap">
+      <h2 className="od-sectionTitle">{children}</h2>
+      {hint ? <span className="od-sectionHint">{hint}</span> : null}
+    </div>
   );
 }
 
-const STATUS_COLORS = {
-  pending:    { bg: "#FEF9C3", text: "#854D0E" },
-  processing: { bg: "#DBEAFE", text: "#1E40AF" },
-  shipped:    { bg: "#E0F2FE", text: "#0369A1" },
-  delivered:  { bg: "#DCFCE7", text: "#166534" },
-  cancelled:  { bg: "#FEE2E2", text: "#991B1B" },
-  returned:   { bg: "#F3F4F6", text: "#374151" },
-  paid:       { bg: "#DCFCE7", text: "#166534" },
-  failed:     { bg: "#FEE2E2", text: "#991B1B" },
-  refunded:   { bg: "#F3F4F6", text: "#374151" },
-};
-
 function StatusBadge({ status }) {
-  const s = STATUS_COLORS[status] || { bg: COLORS.soft, text: COLORS.olive };
+  const normalized = String(status || "unknown").toLowerCase();
+  const style = STATUS_COLORS[normalized] || { bg: COLORS.soft, text: COLORS.accent };
+
   return (
-    <span style={{
-      background: s.bg, color: s.text,
-      fontWeight: 800, fontSize: 12,
-      padding: "4px 10px", borderRadius: 999,
-      textTransform: "capitalize",
-    }}>
-      {status}
+    <span
+      className="od-badge"
+      style={{
+        "--badge-bg": style.bg,
+        "--badge-text": style.text,
+      }}
+    >
+      <span className="od-badgeDot" />
+      {normalized.replace(/_/g, " ")}
     </span>
   );
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 10 }}>
-      <span style={{ color: COLORS.olive }}>{label}</span>
-      <span style={{ fontWeight: 700, color: COLORS.ink }}>{value}</span>
+    <div className="od-infoRow">
+      <span className="od-infoLabel">{label}</span>
+      <div className="od-infoValue">{value}</div>
+    </div>
+  );
+}
+
+const formatMoney = (value) => `৳${Number(value || 0).toLocaleString("en-BD")}`;
+
+const formatDate = (value, options = {}) =>
+  new Date(value).toLocaleDateString("en-BD", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    ...options,
+  });
+
+const getShipmentProgress = (status) => {
+  const current = String(status || "").toLowerCase();
+  if (current === "delivered") return 3;
+  if (current === "shipped") return 2;
+  if (current === "processing" || current === "pending") return 1;
+  return 0;
+};
+
+const shipmentSteps = [
+  { key: "processing", label: "Processing", sub: "Order prepared" },
+  { key: "shipped", label: "Shipped", sub: "On the way" },
+  { key: "delivered", label: "Delivered", sub: "Completed" },
+];
+
+function ShipmentTimeline({ shipment }) {
+  const progress = getShipmentProgress(shipment?.status);
+
+  return (
+    <div className="od-track">
+      {shipmentSteps.map((step, index) => {
+        const isDone = progress > index + 1;
+        const isCurrent = progress === index + 1;
+
+        return (
+          <div
+            key={step.key}
+            className={`od-trackStep ${isDone ? "isDone" : ""} ${isCurrent ? "isCurrent" : ""}`}
+          >
+            <div className="od-trackCircle" />
+            <div className="od-trackText">
+              <span className="od-trackLabel">{step.label}</span>
+              <span className="od-trackSub">{step.sub}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -82,16 +1047,14 @@ export default function OrderDetailsPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [cancelling, setCancelling] = React.useState(false);
-  const [paying, setPaying] = React.useState(false);
-  const [payError, setPayError] = React.useState("");
 
-  // show success banner if navigated here right after placing order
   const justPlaced = location.state?.justPlaced;
 
   React.useEffect(() => {
     const fetchOrder = async () => {
       setLoading(true);
       setError("");
+
       try {
         const data = await fetchWithAuth(`/api/orders/${order_id}`);
         setOrder(data.data.order);
@@ -103,14 +1066,16 @@ export default function OrderDetailsPage() {
         setLoading(false);
       }
     };
+
     if (user && order_id) fetchOrder();
   }, [user, order_id]);
 
   const handleCancel = async () => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
+
     setCancelling(true);
     try {
-      const data = await fetchWithAuth(`/api/orders/${order_id}/cancel`, { method: "PATCH" });
+      await fetchWithAuth(`/api/orders/${order_id}/cancel`, { method: "PATCH" });
       setOrder((prev) => ({ ...prev, order_status: "cancelled" }));
       setSellerOrders((prev) => prev.map((so) => ({ ...so, status: "cancelled" })));
     } catch (err) {
@@ -120,338 +1085,393 @@ export default function OrderDetailsPage() {
     }
   };
 
-  const handlePay = async (method = "card") => {
-    setPaying(true);
-    setPayError("");
-    try {
-      // Step 1: initiate payment
-      const initData = await fetchWithAuth("/api/payments/initiate", {
-        method: "POST",
-        body: JSON.stringify({ order_id: Number(order_id), method }),
-      });
-      // Step 2: confirm payment (simulates gateway callback)
-      await fetchWithAuth("/api/payments/confirm", {
-        method: "POST",
-        body: JSON.stringify({ payment_id: initData.data.payment_id }),
-      });
-      // Update UI
-      setOrder((prev) => ({ ...prev, payment_status: "paid", order_status: "processing" }));
-      setSellerOrders((prev) => prev.map((so) => ({ ...so, status: "processing" })));
-    } catch (err) {
-      setPayError(err.message || "Payment failed");
-    } finally {
-      setPaying(false);
-    }
-  };
+  const shipmentForSeller = (sellerOrderId) =>
+    shipments.find((s) => s.seller_order_id === sellerOrderId);
+
+  const computedTotal = sellerOrders.reduce((sum, so) => {
+    return (
+      sum +
+      (so.items || []).reduce((itemSum, item) => {
+        return itemSum + Number(item.price) * Number(item.quantity);
+      }, 0)
+    );
+  }, 0);
+
+  const campaignAdjusted = Number(computedTotal) !== Number(order?.total_amount);
 
   if (loading) {
     return (
-      <div style={{ background: COLORS.soft, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
-          <p style={{ fontWeight: 700, color: COLORS.olive, fontSize: 16 }}>Loading order...</p>
+      <>
+        <style>{PAGE_CSS}</style>
+        <div className="od-stateWrap">
+          <div className="od-loadingGrid">
+            <div className="od-skeletonCard">
+              <div className="od-skeletonLine w40" />
+              <div className="od-skeletonLine w80" />
+              <div className="od-skeletonSpacer" />
+              <div className="od-skeletonLine w100" />
+              <div className="od-skeletonLine w100" />
+              <div className="od-skeletonLine w60" />
+              <div className="od-skeletonSpacer" />
+              <div className="od-skeletonLine w100" />
+              <div className="od-skeletonLine w80" />
+            </div>
+
+            <div className="od-skeletonCard">
+              <div className="od-skeletonLine w50" />
+              <div className="od-skeletonLine w100" />
+              <div className="od-skeletonLine w100" />
+              <div className="od-skeletonLine w60" />
+              <div className="od-skeletonSpacer" />
+              <div className="od-skeletonLine w100" />
+              <div className="od-skeletonLine w80" />
+            </div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (error || !order) {
     return (
-      <div style={{ background: COLORS.soft, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Card style={{ padding: 40, textAlign: "center", maxWidth: 400 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
-          <p style={{ fontWeight: 700, color: COLORS.ink, marginBottom: 20 }}>{error || "Order not found"}</p>
-          <Link to="/orders" style={{ padding: "10px 20px", background: COLORS.primary, color: COLORS.ink, fontWeight: 900, borderRadius: 10, textDecoration: "none" }}>
-            My orders
-          </Link>
-        </Card>
-      </div>
+      <>
+        <style>{PAGE_CSS}</style>
+        <div className="od-stateWrap">
+          <Card className="od-stateCard">
+            <div className="od-cardInner">
+              <div className="od-stateEmoji">⚠️</div>
+              <h1 className="od-stateTitle">{error || "Order not found"}</h1>
+              <p className="od-stateText">
+                We could not load the order details right now. Please go back to your orders and try again.
+              </p>
+              <Link to="/orders" className="od-linkBtn od-linkBtnPrimary">
+                My orders
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </>
     );
   }
 
-  const shipmentForSeller = (sellerOrderId) =>
-    shipments.find((s) => s.seller_order_id === sellerOrderId);
-
-  const computedTotal = sellerOrders.reduce((sTotal, so) => {
-    return sTotal + (so.items || []).reduce((itemSum, item) => {
-      return itemSum + Number(item.price) * Number(item.quantity);
-    }, 0);
-  }, 0);
-
-  const campaignAdjusted = Number(computedTotal) !== Number(order.total_amount);
+  const deliveredItem = sellerOrders.find((so) => so.status === "delivered")?.items?.[0];
 
   return (
-    <div style={{
-      background: COLORS.soft, color: COLORS.ink,
-      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
-      minHeight: "100vh", paddingBottom: 60,
-    }}>
-      <div className="container mx-auto px-4 py-8">
+    <>
+      <style>{PAGE_CSS}</style>
 
-        {/* Success banner */}
-        {justPlaced && (
-          <div style={{
-            background: "#DCFCE7", border: "1.5px solid #16a34a",
-            borderRadius: 14, padding: "16px 20px", marginBottom: 24,
-            display: "flex", alignItems: "center", gap: 12,
-          }}>
-            <span style={{ fontSize: 24 }}>🎉</span>
-            <div>
-              <p style={{ fontWeight: 900, color: "#166534", fontSize: 15, margin: 0 }}>Order placed successfully!</p>
-              <p style={{ fontSize: 13, color: "#166534", margin: "4px 0 0" }}>
-                We've received your order. You'll be notified when it ships.
-              </p>
+      <div className="od-page">
+        <div className="od-shell">
+          {justPlaced && (
+            <div className="od-successBanner">
+              <div className="od-successBannerInner">
+                <div className="od-successIcon">✓</div>
+                <div>
+                  <p className="od-successTitle">Order placed successfully!</p>
+                  <p className="od-successText">
+                    We’ve received your order. You’ll be notified as soon as shipment updates are available.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 28 }}>
-          <div>
-            <Link to="/orders" style={{ fontSize: 13, color: COLORS.olive, fontWeight: 700, textDecoration: "none" }}>
-              ← My orders
-            </Link>
-            <h1 style={{ fontSize: 28, fontWeight: 900, margin: "6px 0 4px" }}>
-              Order #{order.order_id}
-            </h1>
-            <p style={{ fontSize: 13, color: COLORS.olive, margin: 0 }}>
-              Placed on {new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "long", year: "numeric" })}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <StatusBadge status={order.order_status} />
-            <StatusBadge status={order.payment_status} />
-            {order.order_status === "pending" && order.payment_status !== "paid" && (
-              <button
-                onClick={() => handlePay("card")}
-                disabled={paying}
-                style={{
-                  padding: "8px 20px", background: COLORS.primary,
-                  border: `1.5px solid ${COLORS.ink}`, color: COLORS.ink,
-                  fontWeight: 900, fontSize: 13, borderRadius: 10,
-                  cursor: paying ? "not-allowed" : "pointer",
-                  opacity: paying ? 0.6 : 1,
-                }}
-              >
-                {paying ? "Processing..." : "Pay now"}
-              </button>
-            )}
-            {order.order_status === "pending" && (
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                style={{
-                  padding: "8px 16px", background: "transparent",
-                  border: "1.5px solid #dc2626", color: "#dc2626",
-                  fontWeight: 800, fontSize: 13, borderRadius: 10,
-                  cursor: cancelling ? "not-allowed" : "pointer",
-                  opacity: cancelling ? 0.6 : 1,
-                }}
-              >
-                {cancelling ? "Cancelling..." : "Cancel order"}
-              </button>
-            )}
-            {sellerOrders.some(so => so.status === "delivered") && (
-              (() => {
-                const deliveredItem = sellerOrders.find(so => so.status === "delivered")?.items?.[0];
-                if (deliveredItem?.order_item_id) {
-                  return (
-                    <Link to={`/returns/${deliveredItem.order_item_id}`}
-                      style={{
-                        fontSize: 13, fontWeight: 900, padding: "8px 20px",
-                        background: "#FEE2E2", color: "#991B1B",
-                        borderRadius: 10, textDecoration: "none",
-                        border: "1.5px solid #991B1B",
-                        display: "inline-block"
-                      }}>
-                      Return items
-                    </Link>
-                  );
-                }
-              })()
-            )}
-            {payError && (
-              <p style={{ fontSize: 13, color: "#dc2626", fontWeight: 700, margin: 0 }}>{payError}</p>
-            )}
-          </div>
-        </div>
+          <section className="od-hero">
+            <div className="od-heroTop">
+              <div>
+                <Link to="/orders" className="od-breadcrumb">
+                  <span>←</span>
+                  <span>My orders</span>
+                </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left — seller orders + items */}
-          <div className="lg:col-span-2 space-y-6">
-            {sellerOrders.map((so) => {
-              const shipment = shipmentForSeller(so.seller_order_id);
-              return (
-                <Card key={so.seller_order_id} style={{ padding: 20 }}>
-                  {/* Seller header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid rgba(32,29,24,0.1)` }}>
-                    <div>
-                      <p style={{ fontWeight: 900, fontSize: 14, color: COLORS.ink, margin: 0 }}>
-                        {so.business_name || `Seller #${so.seller_id}`}
-                      </p>
-                      <p style={{ fontSize: 12, color: COLORS.olive, margin: "4px 0 0" }}>
-                        Sub-order #{so.seller_order_id}
-                      </p>
-                    </div>
-                    <StatusBadge status={so.status} />
-                  </div>
+                <h1 className="od-orderTitle">Order #{order.order_id}</h1>
 
-                  {/* Items */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-                    {(so.items || []).map((item) => (
-                      <div key={item.order_item_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                <div className="od-orderMeta">
+                  <span className="od-metaPill">Placed on {formatDate(order.created_at)}</span>
+                  <span className="od-metaPill">{sellerOrders.length} seller order(s)</span>
+                  <span className="od-metaPill">Total {formatMoney(order.total_amount)}</span>
+                </div>
+              </div>
+
+              <div className="od-actions">
+                <StatusBadge status={order.order_status} />
+                <StatusBadge status={order.payment_status} />
+
+                {order.order_status === "pending" && (
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                    className="od-btn od-btnDanger"
+                  >
+                    {cancelling ? "Cancelling..." : "Cancel order"}
+                  </button>
+                )}
+
+                {sellerOrders.some((so) => so.status === "delivered") && deliveredItem?.order_item_id && (
+                  <Link
+                    to={`/returns/${deliveredItem.order_item_id}`}
+                    className="od-linkBtn od-linkBtnDanger"
+                  >
+                    Return items
+                  </Link>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <div className="od-grid">
+            <div className="od-main">
+              {sellerOrders.map((so, index) => {
+                const shipment = shipmentForSeller(so.seller_order_id);
+
+                return (
+                  <Card
+                    key={so.seller_order_id}
+                    style={{ animationDelay: `${index * 90}ms` }}
+                  >
+                    <div className="od-cardInner">
+                      <div className="od-sellerHeader">
                         <div>
-                          <p style={{ fontWeight: 700, color: COLORS.ink, margin: 0 }}>
-                            Variant #{item.variant_id}
+                          <p className="od-sellerName">
+                            {so.business_name || `Seller #${so.seller_id}`}
                           </p>
-                          <p style={{ color: COLORS.olive, margin: "2px 0 0" }}>
-                            Qty: {item.quantity} × ₹{Number(item.price).toLocaleString("en-BD")}
-                          </p>
+                          <p className="od-sellerSub">Sub-order #{so.seller_order_id}</p>
+
+                          <div className="od-subOrderMeta">
+                            <span className="od-miniPill">
+                              {(so.items || []).length} item(s)
+                            </span>
+                            <span className="od-miniPill">
+                              Subtotal {formatMoney(so.subtotal)}
+                            </span>
+                          </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <p style={{ fontWeight: 900, color: COLORS.ink, margin: 0 }}>
-                            ₹{(Number(item.price) * item.quantity).toLocaleString("en-BD")}
-                            {item.original_price && Number(item.original_price) !== Number(item.price) ? (
-                              <span style={{ fontSize: 11, color: "#16a34a", marginLeft: 8 }}>
-                                (campaign ₹{Number(item.price).toLocaleString("en-BD")})
+
+                        <StatusBadge status={so.status} />
+                      </div>
+
+                      <div className="od-items">
+                        {(so.items || []).map((item) => (
+                          <div key={item.order_item_id} className="od-itemRow">
+                            <div className="od-itemLeft">
+                              <p className="od-itemTitle">Variant #{item.variant_id}</p>
+
+                              <div className="od-itemMeta">
+                                <span className="od-miniPill">Qty {item.quantity}</span>
+                                <span className="od-miniPill">
+                                  Unit {formatMoney(item.price)}
+                                </span>
+                                <span className="od-itemMetaText">
+                                  {(Number(item.price) * Number(item.quantity)).toLocaleString("en-BD")} total
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="od-itemPriceWrap">
+                              <span className="od-price">
+                                {formatMoney(Number(item.price) * Number(item.quantity))}
                               </span>
+
+                              {item.original_price &&
+                              Number(item.original_price) !== Number(item.price) ? (
+                                <span className="od-campaignText">
+                                  Campaign price {formatMoney(item.price)}
+                                </span>
+                              ) : null}
+
+                              {so.status === "delivered" && (
+                                <Link
+                                  to={`/returns/${item.order_item_id}`}
+                                  className="od-linkBtn od-linkBtnDanger"
+                                  style={{ minHeight: 36, padding: "0 14px", fontSize: 12 }}
+                                >
+                                  Return
+                                </Link>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="od-divider" />
+
+                      <div className="od-totalRow">
+                        <span className="od-totalLabel">Subtotal</span>
+                        <span className="od-totalValue">{formatMoney(so.subtotal)}</span>
+                      </div>
+
+                      {shipment && (
+                        <div className="od-shipment">
+                          <div className="od-shipmentTop">
+                            <div>
+                              <p className="od-shipmentTitle">Shipment tracking</p>
+                            </div>
+                            <StatusBadge status={shipment.status} />
+                          </div>
+
+                          <ShipmentTimeline shipment={shipment} />
+
+                          <div className="od-shipmentMeta">
+                            <div className="od-shipBox">
+                              <p className="od-shipLabel">Courier</p>
+                              <p className="od-shipValue">{shipment.courier_name || "Courier"}</p>
+                            </div>
+
+                            {shipment.tracking_number ? (
+                              <div className="od-shipBox">
+                                <p className="od-shipLabel">Tracking number</p>
+                                <p className="od-shipValue">{shipment.tracking_number}</p>
+                              </div>
                             ) : null}
-                          </p>
-                          {so.status === "delivered" && (
-                            <Link to={`/returns/${item.order_item_id}`}
-                              style={{ fontSize: 11, fontWeight: 800, padding: "4px 10px", background: "#FEE2E2", color: "#991B1B", borderRadius: 8, textDecoration: "none" }}>
-                              Return
-                            </Link>
-                          )}
+
+                            {shipment.courier_contact ? (
+                              <div className="od-shipBox">
+                                <p className="od-shipLabel">Contact</p>
+                                <p className="od-shipValue">{shipment.courier_contact}</p>
+                              </div>
+                            ) : null}
+
+                            {shipment.shipped_at ? (
+                              <div className="od-shipBox">
+                                <p className="od-shipLabel">Shipped on</p>
+                                <p className="od-shipValue">
+                                  {formatDate(shipment.shipped_at, {
+                                    month: "short",
+                                  })}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {shipment.delivered_at ? (
+                              <div className="od-shipBox">
+                                <p className="od-shipLabel">Delivered on</p>
+                                <p className="od-shipValue">
+                                  {formatDate(shipment.delivered_at, {
+                                    month: "short",
+                                  })}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Subtotal */}
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 12, borderTop: `1px solid rgba(32,29,24,0.1)`, marginBottom: shipment ? 14 : 0 }}>
-                    <span style={{ color: COLORS.olive }}>Subtotal</span>
-                    <span style={{ fontWeight: 900 }}>₹{Number(so.subtotal).toLocaleString("en-BD")}</span>
-                  </div>
-
-                  {/* Shipment tracking */}
-                  {shipment && (
-                    <div style={{ marginTop: 14, padding: "12px 14px", background: COLORS.soft, borderRadius: 10 }}>
-                      <p style={{ fontSize: 12, fontWeight: 900, color: COLORS.olive, margin: "0 0 6px", letterSpacing: 0.3 }}>SHIPMENT</p>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                        <span style={{ color: COLORS.ink, fontWeight: 700 }}>{shipment.courier_name || "Courier"}</span>
-                        <StatusBadge status={shipment.status} />
-                      </div>
-                      {shipment.courier_contact && (
-                        <p style={{ fontSize: 12, color: COLORS.olive, margin: "6px 0 0" }}>
-                          Contact: <strong>{shipment.courier_contact}</strong>
-                        </p>
-                      )}
-                      {shipment.tracking_number && (
-                        <p style={{ fontSize: 12, color: COLORS.olive, margin: "6px 0 0" }}>
-                          Tracking: <strong>{shipment.tracking_number}</strong>
-                        </p>
-                      )}
-                      {shipment.shipped_at && (
-                        <p style={{ fontSize: 12, color: COLORS.olive, margin: "4px 0 0" }}>
-                          Shipped: {new Date(shipment.shipped_at).toLocaleDateString("en-BD")}
-                        </p>
-                      )}
-                      {shipment.delivered_at && (
-                        <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 700, margin: "4px 0 0" }}>
-                          Delivered: {new Date(shipment.delivered_at).toLocaleDateString("en-BD")}
-                        </p>
                       )}
                     </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
+                  </Card>
+                );
+              })}
+            </div>
 
-          {/* Right — order summary + address */}
-          <div className="space-y-6">
-            <Card style={{ padding: 20 }}>
-              <SectionTitle>Order summary</SectionTitle>
-              <InfoRow label="Order ID" value={`#${order.order_id}`} />
-              <InfoRow
-                label="Date"
-                value={new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}
-              />
-              <InfoRow label="Order status" value={<StatusBadge status={order.order_status} />} />
-              <InfoRow label="Payment status" value={<StatusBadge status={order.payment_status} />} />
-              {order.coupon_code && (
-                <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(22,163,74,0.08)", borderRadius: 10 }}>
-                  <p style={{ margin: 0, fontSize: 12, color: "#16a34a", fontWeight: 700 }}>
-                    Coupon applied: {order.coupon_code} (-₹{Number(order.coupon_amount || 0).toLocaleString("en-BD")})
-                  </p>
-                </div>
-              )}
-              <div style={{ borderTop: `1px solid rgba(32,29,24,0.1)`, paddingTop: 14, marginTop: 4 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
-                    <span>Subtotal</span>
-                    {campaignAdjusted ? (
-                      <span style={{ fontWeight: 900, color: COLORS.ink }}>
-                        ₹{Number(computedTotal).toLocaleString("en-BD")} (campaign price)
-                      </span>
-                    ) : (
-                      <span>₹{Number(order.total_amount).toLocaleString("en-BD")}</span>
+            <div className="od-side">
+              <div className="od-sticky">
+                <Card>
+                  <div className="od-cardInner">
+                    <SectionTitle hint="Live status">Order summary</SectionTitle>
+
+                    <div className="od-infoStack">
+                      <InfoRow label="Order ID" value={`#${order.order_id}`} />
+                      <InfoRow
+                        label="Date"
+                        value={formatDate(order.created_at, {
+                          month: "short",
+                        })}
+                      />
+                      <InfoRow
+                        label="Order status"
+                        value={<StatusBadge status={order.order_status} />}
+                      />
+                      <InfoRow
+                        label="Payment status"
+                        value={<StatusBadge status={order.payment_status} />}
+                      />
+                    </div>
+
+                    {order.coupon_code && (
+                      <div className="od-couponBox">
+                        Coupon applied: {order.coupon_code} (
+                        -{formatMoney(order.coupon_amount || 0)})
+                      </div>
                     )}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
-                      <span>Final</span>
-                      <span style={{ fontWeight: 900 }}>₹{Number(order.total_amount).toLocaleString("en-BD")}</span>
-                  </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: COLORS.olive, marginBottom: 8 }}>
-                  <span>Shipping</span>
-                  <span style={{ color: "#16a34a", fontWeight: 700 }}>₹{Number(order.shipping_fee || 0).toLocaleString("en-BD")}</span>
-                </div>
-                {order.coupon_code && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#16a34a", fontWeight: 700 }}>
-                    <span>Coupon savings ({order.coupon_code})</span>
-                    <span>-₹{Number(order.coupon_amount || 0).toLocaleString("en-BD")}</span>
-                  </div>
-                )}
-              </div>
-            </Card>
 
-            {/* Delivery address */}
-            {(order.city || order.area || order.address_details) && (
-              <Card style={{ padding: 20 }}>
-                <SectionTitle>Delivery address</SectionTitle>
-                <p style={{ fontSize: 14, fontWeight: 800, color: COLORS.ink, margin: "0 0 4px" }}>
-                  {[order.city, order.area].filter(Boolean).join(", ")}
-                </p>
-                {order.address_details && (
-                  <p style={{ fontSize: 13, color: COLORS.olive, margin: 0, lineHeight: 1.5 }}>
-                    {order.address_details}
-                  </p>
-                )}
-              </Card>
-            )}
+                    <div className="od-summarySplit">
+                      <div className="od-moneyRow">
+                        <span className="od-moneyLabel">Subtotal</span>
+                        <span className="od-moneyValue">
+                          {campaignAdjusted
+                            ? `${formatMoney(computedTotal)} (campaign price)`
+                            : formatMoney(order.total_amount)}
+                        </span>
+                      </div>
 
-            {/* Actions */}
-            <Card style={{ padding: 20 }}>
-              <SectionTitle>Actions</SectionTitle>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <Link
-                  to="/orders"
-                  style={{ display: "block", textAlign: "center", padding: "11px", background: COLORS.primary, color: COLORS.ink, fontWeight: 900, fontSize: 13, borderRadius: 10, textDecoration: "none" }}
-                >
-                  My orders
-                </Link>
-                <Link
-                  to="/"
-                  style={{ display: "block", textAlign: "center", padding: "11px", border: `1.5px solid ${COLORS.olive}`, color: COLORS.olive, fontWeight: 700, fontSize: 13, borderRadius: 10, textDecoration: "none" }}
-                >
-                  Continue shopping
-                </Link>
+                      <div className="od-moneyRow">
+                        <span className="od-moneyLabel">Shipping</span>
+                        <span className="od-moneyValue isGreen">
+                          {formatMoney(order.shipping_fee || 0)}
+                        </span>
+                      </div>
+
+                      {order.coupon_code && (
+                        <div className="od-moneyRow">
+                          <span className="od-moneyLabel">
+                            Coupon savings ({order.coupon_code})
+                          </span>
+                          <span className="od-moneyValue isGreen">
+                            -{formatMoney(order.coupon_amount || 0)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="od-grandTotal">
+                        <span className="od-grandTotalLabel">Final total</span>
+                        <span className="od-grandTotalValue">
+                          {formatMoney(order.total_amount)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {(order.city || order.area || order.address_details) && (
+                  <Card style={{ marginTop: 20 }}>
+                    <div className="od-cardInner">
+                      <SectionTitle>Delivery address</SectionTitle>
+
+                      <h3 className="od-addressTitle">
+                        {[order.city, order.area].filter(Boolean).join(", ")}
+                      </h3>
+
+                      {order.address_details && (
+                        <p className="od-addressText">{order.address_details}</p>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
+                <Card style={{ marginTop: 20 }}>
+                  <div className="od-cardInner">
+                    <SectionTitle>Actions</SectionTitle>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                      }}
+                    >
+                      <Link to="/orders" className="od-linkBtn od-linkBtnPrimary">
+                        My orders
+                      </Link>
+
+                      <Link to="/" className="od-linkBtn od-linkBtnGhost">
+                        Continue shopping
+                      </Link>
+                    </div>
+                  </div>
+                </Card>
               </div>
-            </Card>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
-

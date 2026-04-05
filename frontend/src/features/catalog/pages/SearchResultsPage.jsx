@@ -3,114 +3,197 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth.jsx";
 
 const COLORS = {
-  bg: "#FDFDF9", soft: "#FBEF9C",
-  primary: "#FEE32B", olive: "#877928", ink: "#201D18",
+  page: "#f7f7f2",
+  card: "rgba(255,255,255,0.82)",
+  cardSolid: "#ffffff",
+  soft: "#fff7be",
+  primary: "#fee32b",
+  primaryDeep: "#f6d90a",
+  olive: "#8b7e35",
+  oliveDark: "#5e5420",
+  ink: "#171510",
+  subtext: "rgba(23,21,16,0.68)",
+  border: "rgba(23,21,16,0.10)",
+  borderStrong: "rgba(23,21,16,0.16)",
+  shadow: "0 20px 50px rgba(23,21,16,0.08)",
+  shadowSoft: "0 12px 30px rgba(23,21,16,0.06)",
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+const LIMIT = 20;
+
 const s = {
-  card: {
-    background: COLORS.bg, border: `1px solid rgba(32,29,24,0.12)`,
-    borderRadius: 16, boxShadow: "0 10px 26px rgba(32,29,24,0.08)", overflow: "hidden",
-  },
   input: {
-    padding: "10px 14px", fontSize: 13, borderRadius: 10,
-    border: `1px solid rgba(32,29,24,0.2)`, background: COLORS.bg,
-    color: COLORS.ink, outline: "none", width: "100%",
+    width: "100%",
+    height: 52,
+    borderRadius: 16,
+    border: `1px solid ${COLORS.borderStrong}`,
+    background: "rgba(255,255,255,0.9)",
+    color: COLORS.ink,
+    padding: "0 16px",
+    fontSize: 14,
+    outline: "none",
+    transition: "all .25s ease",
+    boxSizing: "border-box",
   },
-  btn: (primary) => ({
-    padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 900,
-    cursor: "pointer", border: "none",
-    background: primary ? COLORS.ink : "transparent",
-    color: primary ? COLORS.primary : COLORS.olive,
-    ...(primary ? {} : { border: `1px solid ${COLORS.olive}` }),
+  smallInput: {
+    width: "100%",
+    height: 46,
+    borderRadius: 14,
+    border: `1px solid ${COLORS.border}`,
+    background: COLORS.cardSolid,
+    color: COLORS.ink,
+    padding: "0 14px",
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  filterLabel: {
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 0.8,
+    color: COLORS.olive,
+    margin: "0 0 7px",
+  },
+  btn: ({ primary = false, ghost = false } = {}) => ({
+    height: 48,
+    padding: ghost ? "0 16px" : "0 20px",
+    borderRadius: 14,
+    border: primary ? "none" : `1px solid ${COLORS.borderStrong}`,
+    background: primary
+      ? `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDeep} 100%)`
+      : ghost
+        ? "rgba(255,255,255,0.82)"
+        : "transparent",
+    color: COLORS.ink,
+    fontWeight: 900,
+    fontSize: 13,
+    cursor: "pointer",
+    transition: "all .25s ease",
+    boxShadow: primary ? "0 12px 24px rgba(254,227,43,.28)" : "none",
+    whiteSpace: "nowrap",
   }),
-  badge: (status) => {
-    const map = {
-      pending: { bg: "#FEF9C3", text: "#854D0E" },
-      processing: { bg: "#DBEAFE", text: "#1E40AF" },
-      delivered: { bg: "#DCFCE7", text: "#166534" },
-    };
-    const c = map[status] || { bg: COLORS.soft, text: COLORS.olive };
-    return { background: c.bg, color: c.text, fontSize: 11, fontWeight: 900, padding: "2px 8px", borderRadius: 999 };
-  },
 };
 
-// ── Product card ──────────────────────────────────────────────────────────────
-function ProductCard({ p, onAddToCart }) {
+function SearchSkeletonCard({ index = 0 }) {
+  return (
+    <div
+      className="sr-card sr-enter"
+      style={{
+        animationDelay: `${index * 60}ms`,
+        overflow: "hidden",
+        padding: 12,
+      }}
+    >
+      <div className="sr-skeleton shimmer" style={{ height: 190, borderRadius: 18, marginBottom: 12 }} />
+      <div className="sr-skeleton shimmer" style={{ height: 14, width: "78%", borderRadius: 999, marginBottom: 10 }} />
+      <div className="sr-skeleton shimmer" style={{ height: 12, width: "42%", borderRadius: 999, marginBottom: 14 }} />
+      <div className="sr-skeleton shimmer" style={{ height: 18, width: "36%", borderRadius: 999, marginBottom: 16 }} />
+      <div className="sr-skeleton shimmer" style={{ height: 42, borderRadius: 14 }} />
+    </div>
+  );
+}
+
+function ProductCard({ p, onAddToCart, index = 0 }) {
   const price = p.discount_price || p.min_price || p.price || 0;
   const original = p.min_price || p.price || 0;
   const hasDiscount = p.discount_price && Number(p.discount_price) < Number(original);
   const outOfStock = Number(p.total_stock ?? p.stock ?? 1) <= 0;
-  const pct = hasDiscount ? Math.round(((Number(original) - Number(p.discount_price)) / Number(original)) * 100) : 0;
+  const pct = hasDiscount
+    ? Math.round(((Number(original) - Number(p.discount_price)) / Number(original)) * 100)
+    : 0;
   const pid = p.product_id || p.id;
 
   return (
-    <div style={{ ...s.card, display: "flex", flexDirection: "column" }}>
-      <Link to={`/p/${pid}`} style={{ textDecoration: "none", color: "inherit" }}>
-        <div style={{ position: "relative" }}>
+    <article className="sr-card sr-product sr-enter" style={{ animationDelay: `${index * 55}ms` }}>
+      <Link to={`/p/${pid}`} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+        <div className="sr-media-wrap">
           <img
             src={p.image_url || p.image || "https://via.placeholder.com/300?text=?"}
             alt={p.name}
-            style={{ width: "100%", height: 160, objectFit: "cover", background: COLORS.soft, display: "block" }}
+            className="sr-media"
           />
-          {hasDiscount && (
-            <span style={{
-              position: "absolute", top: 8, left: 8, background: COLORS.primary,
-              color: COLORS.ink, fontSize: 11, fontWeight: 900, padding: "2px 8px", borderRadius: 6,
-            }}>{pct}% OFF</span>
-          )}
+
+          <div className="sr-media-glow" />
+
+          {hasDiscount && <span className="sr-badge sr-badge-sale">{pct}% OFF</span>}
+          {p.brand && <span className="sr-badge sr-badge-brand">{p.brand}</span>}
+
           {outOfStock && (
-            <div style={{
-              position: "absolute", inset: 0, background: "rgba(255,255,255,0.75)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <span style={{ fontWeight: 900, fontSize: 12, color: "#dc2626" }}>Out of stock</span>
+            <div className="sr-stock-overlay">
+              <span>Out of stock</span>
             </div>
           )}
         </div>
-        <div style={{ padding: "10px 12px 6px" }}>
-          <p style={{ fontWeight: 800, fontSize: 13, color: COLORS.ink, margin: "0 0 2px", lineHeight: 1.3 }}>{p.name}</p>
-          <p style={{ fontSize: 11, color: COLORS.olive, margin: "0 0 6px" }}>{p.brand || "—"}</p>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-            <span style={{ fontWeight: 900, fontSize: 15, color: COLORS.ink }}>
-              ₹{Number(price).toLocaleString("en-IN")}
+
+        <div style={{ padding: "16px 16px 12px" }}>
+          <h3
+            style={{
+              fontSize: 15,
+              lineHeight: 1.42,
+              fontWeight: 800,
+              color: COLORS.ink,
+              margin: "0 0 8px",
+              minHeight: 42,
+            }}
+          >
+            {p.name}
+          </h3>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: outOfStock ? "#ef4444" : "#22c55e",
+                boxShadow: outOfStock ? "0 0 0 5px rgba(239,68,68,.08)" : "0 0 0 5px rgba(34,197,94,.08)",
+              }}
+            />
+            <span style={{ fontSize: 12, color: COLORS.subtext, fontWeight: 700 }}>
+              {outOfStock ? "Currently unavailable" : "Ready to ship"}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 900, fontSize: 20, color: COLORS.ink }}>
+              ৳{Number(price).toLocaleString("en-IN")}
             </span>
             {hasDiscount && (
-              <span style={{ fontSize: 11, color: "rgba(32,29,24,0.4)", textDecoration: "line-through" }}>
-                ₹{Number(original).toLocaleString("en-IN")}
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "rgba(23,21,16,0.4)",
+                  textDecoration: "line-through",
+                  fontWeight: 700,
+                }}
+              >
+                ৳{Number(original).toLocaleString("en-IN")}
               </span>
             )}
           </div>
         </div>
       </Link>
-      <div style={{ padding: "6px 12px 12px" }}>
+
+      <div style={{ padding: "0 16px 16px" }}>
         <button
           onClick={() => !outOfStock && onAddToCart(pid)}
-          style={{
-            width: "100%", padding: "9px 0", borderRadius: 10, border: "none",
-            background: outOfStock ? "rgba(32,29,24,0.08)" : COLORS.primary,
-            color: outOfStock ? COLORS.olive : COLORS.ink,
-            fontWeight: 900, fontSize: 12,
-            cursor: outOfStock ? "not-allowed" : "pointer",
-          }}
+          className={`sr-cart-btn ${outOfStock ? "is-disabled" : ""}`}
+          type="button"
+          aria-label={outOfStock ? `${p.name} is out of stock` : `Add ${p.name} to cart`}
         >
-          {outOfStock ? "Out of stock" : "Add to cart"}
+          <span>{outOfStock ? "Out of stock" : "Add to cart"}</span>
+          {!outOfStock && <span className="sr-cart-arrow">→</span>}
         </button>
       </div>
-    </div>
+    </article>
   );
 }
-
-// ── Main page ─────────────────────────────────────────────────────────────────
-const LIMIT = 20;
 
 export default function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { fetchWithAuth, user } = useAuth();
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [inputValue, setInputValue] = React.useState(searchParams.get("q") || "");
   const [suggestions, setSuggestions] = React.useState([]);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
@@ -131,7 +214,6 @@ export default function SearchResultsPage() {
   const debounceRef = React.useRef(null);
   const currentQ = searchParams.get("q") || "";
 
-  // ── Fetch categories once ─────────────────────────────────────────────────
   React.useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
@@ -139,71 +221,70 @@ export default function SearchResultsPage() {
       .catch(() => {});
   }, []);
 
-  // ── Load search history / popular suggestions when input is empty ─────────
   React.useEffect(() => {
     const uid = user?.user_id ?? null;
     const url = uid
       ? `/api/products/search/suggestions?user_id=${uid}&limit=8`
       : `/api/products/search/suggestions?limit=8`;
+
     fetch(url)
       .then((r) => r.json())
       .then((d) => {
-        // Store as history suggestions — shown when input is blank
         setSuggestions((prev) => {
-          // Only update if input is currently empty so we don't clobber autocomplete
           if (!inputValue.trim()) return (d.data || []).map((s) => ({ ...s, isHistory: true }));
           return prev;
         });
       })
       .catch(() => {});
-  }, [user?.user_id]); // re-fetch when user logs in/out
-
-  // ── Fetch search results ───────────────────────────────────────────────────
-  const runSearch = React.useCallback(async (q, filters, pg) => {
-    setLoading(true);
-    setSearched(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      params.set("page", pg);
-      params.set("limit", LIMIT);
-      if (filters.minPrice)   params.set("min_price", filters.minPrice);
-      if (filters.maxPrice)   params.set("max_price", filters.maxPrice);
-      if (filters.inStock)    params.set("in_stock", filters.inStock);
-      if (filters.sort)       params.set("sort", filters.sort);
-      if (filters.categoryId) params.set("category_id", filters.categoryId);
-      // user.user_id is the correct field name (snake_case from DB row)
-      if (user?.user_id)      params.set("user_id", user.user_id);
-
-      const res = await fetch(`/api/products/search?${params}`);
-      const data = await res.json();
-      setProducts(data.data || []);
-      setTotal(data.meta?.total || 0);
-      setPage(pg);
-    } catch (err) {
-      console.error("search error:", err);
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
   }, [user?.user_id]);
 
-  // ── Run search when URL query changes ──────────────────────────────────────
+  const runSearch = React.useCallback(
+    async (q, filters, pg) => {
+      setLoading(true);
+      setSearched(true);
+
+      try {
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        params.set("page", pg);
+        params.set("limit", LIMIT);
+        if (filters.minPrice) params.set("min_price", filters.minPrice);
+        if (filters.maxPrice) params.set("max_price", filters.maxPrice);
+        if (filters.inStock) params.set("in_stock", filters.inStock);
+        if (filters.sort) params.set("sort", filters.sort);
+        if (filters.categoryId) params.set("category_id", filters.categoryId);
+        if (user?.user_id) params.set("user_id", user.user_id);
+
+        const res = await fetch(`/api/products/search?${params}`);
+        const data = await res.json();
+        setProducts(data.data || []);
+        setTotal(data.meta?.total || 0);
+        setPage(pg);
+      } catch (err) {
+        console.error("search error:", err);
+        setProducts([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [user?.user_id]
+  );
+
   React.useEffect(() => {
     setInputValue(currentQ);
-    runSearch(currentQ, { minPrice, maxPrice, inStock, sort }, 1);
-  }, [currentQ]); // only fires when URL changes
+    runSearch(currentQ, { minPrice, maxPrice, inStock, sort, categoryId }, 1);
+  }, [currentQ]);
 
-  // ── Autocomplete — blends product-name matches with search history ─────────
   React.useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (!inputValue.trim()) {
-      // Input cleared — reload history suggestions
       const uid = user?.user_id ?? null;
       const url = uid
         ? `/api/products/search/suggestions?user_id=${uid}&limit=8`
         : `/api/products/search/suggestions?limit=8`;
+
       fetch(url)
         .then((r) => r.json())
         .then((d) => setSuggestions((d.data || []).map((s) => ({ ...s, isHistory: true }))))
@@ -213,40 +294,39 @@ export default function SearchResultsPage() {
 
     debounceRef.current = setTimeout(async () => {
       try {
-        // Fetch product-name autocomplete
         const [autoRes, histRes] = await Promise.all([
           fetch(`/api/products/search/autocomplete?q=${encodeURIComponent(inputValue)}`),
           fetch(`/api/products/search/suggestions?user_id=${user?.user_id ?? ""}&limit=5`),
         ]);
+
         const autoData = await autoRes.json();
         const histData = await histRes.json();
 
         const autoItems = (autoData.data || []).map((s) => ({ query: s.name, isHistory: false }));
-        // Filter history to those that start with the current input
         const histItems = (histData.data || [])
           .filter((s) => s.query?.toLowerCase().startsWith(inputValue.toLowerCase()))
           .map((s) => ({ ...s, isHistory: true }));
 
-        // Merge: history matches first, then product names, deduplicated
         const seen = new Set();
-        const merged = [...histItems, ...autoItems].filter((s) => {
-          if (seen.has(s.query)) return false;
-          seen.add(s.query);
+        const merged = [...histItems, ...autoItems].filter((item) => {
+          if (seen.has(item.query)) return false;
+          seen.add(item.query);
           return true;
         });
 
         setSuggestions(merged.slice(0, 8));
-      } catch { setSuggestions([]); }
-    }, 300);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 280);
+
     return () => clearTimeout(debounceRef.current);
   }, [inputValue, user?.user_id]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSearch = (e) => {
     e?.preventDefault();
     setShowSuggestions(false);
     setSearchParams({ q: inputValue.trim() });
-    // URL change will trigger the useEffect above
   };
 
   const handleApplyFilters = () => {
@@ -254,7 +334,11 @@ export default function SearchResultsPage() {
   };
 
   const handleClearFilters = () => {
-    setMinPrice(""); setMaxPrice(""); setInStock(""); setSort(""); setCategoryId("");
+    setMinPrice("");
+    setMaxPrice("");
+    setInStock("");
+    setSort("");
+    setCategoryId("");
     runSearch(currentQ, { minPrice: "", maxPrice: "", inStock: "", sort: "", categoryId: "" }, 1);
   };
 
@@ -264,12 +348,21 @@ export default function SearchResultsPage() {
   };
 
   const handleAddToCart = async (productId) => {
-    if (!user) { navigate("/auth/login"); return; }
+    if (!user) {
+      navigate("/auth/login");
+      return;
+    }
+
     try {
       const res = await fetch(`/api/products/${productId}`);
       const json = await res.json();
       const variant = json?.data?.variants?.[0];
-      if (!variant) { alert("No variant available"); return; }
+
+      if (!variant) {
+        alert("No variant available");
+        return;
+      }
+
       await fetchWithAuth("/api/cart/items", {
         method: "POST",
         body: JSON.stringify({ variant_id: variant.variant_id, quantity: 1 }),
@@ -281,211 +374,696 @@ export default function SearchResultsPage() {
   };
 
   const totalPages = Math.ceil(total / LIMIT);
+  const activeFilterCount = [minPrice, maxPrice, inStock, sort, categoryId].filter(Boolean).length;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: COLORS.soft, minHeight: "100vh", paddingBottom: 60, fontFamily: "system-ui, sans-serif" }}>
-      <div className="container mx-auto px-4 py-8">
+    <>
+      <style>{`
+        .sr-page {
+          min-height: 100vh;
+          background:
+            radial-gradient(circle at 15% 20%, rgba(254,227,43,0.20), transparent 30%),
+            radial-gradient(circle at 85% 15%, rgba(139,126,53,0.10), transparent 26%),
+            linear-gradient(180deg, #fffdf4 0%, #f7f7f2 45%, #f4f4ef 100%);
+          position: relative;
+          overflow: hidden;
+        }
+        .sr-shell {
+          position: relative;
+          z-index: 2;
+          max-width: 1320px;
+          margin: 0 auto;
+          padding: 40px 18px 64px;
+          box-sizing: border-box;
+        }
+        .sr-blob,
+        .sr-blob::before {
+          position: absolute;
+          border-radius: 999px;
+          filter: blur(10px);
+          pointer-events: none;
+        }
+        .sr-blob.one {
+          width: 320px;
+          height: 320px;
+          right: -120px;
+          top: 80px;
+          background: rgba(254,227,43,0.18);
+          animation: srFloat 12s ease-in-out infinite;
+        }
+        .sr-blob.two {
+          width: 240px;
+          height: 240px;
+          left: -70px;
+          top: 420px;
+          background: rgba(139,126,53,0.10);
+          animation: srFloat 15s ease-in-out infinite reverse;
+        }
+        .sr-hero {
+          position: relative;
+          background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.75));
+          border: 1px solid rgba(23,21,16,0.08);
+          box-shadow: 0 24px 60px rgba(23,21,16,0.08);
+          backdrop-filter: blur(12px);
+          border-radius: 28px;
+          padding: 28px;
+          overflow: hidden;
+          margin-bottom: 20px;
+        }
+        .sr-hero::after {
+          content: "";
+          position: absolute;
+          inset: auto -20% -65% auto;
+          width: 340px;
+          height: 340px;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(254,227,43,.30), transparent 60%);
+          pointer-events: none;
+        }
+        .sr-enter {
+          opacity: 0;
+          transform: translateY(24px);
+          animation: srReveal .7s cubic-bezier(.2,.7,.2,1) forwards;
+        }
+        .sr-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: rgba(254,227,43,0.16);
+          color: ${COLORS.oliveDark};
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: .4px;
+          margin-bottom: 14px;
+        }
+        .sr-heading {
+          font-size: clamp(28px, 4.2vw, 46px);
+          line-height: 1.08;
+          letter-spacing: -0.03em;
+          color: ${COLORS.ink};
+          font-weight: 900;
+          margin: 0 0 10px;
+          max-width: 840px;
+        }
+        .sr-subtitle {
+          color: ${COLORS.subtext};
+          font-size: 15px;
+          line-height: 1.7;
+          max-width: 720px;
+          margin: 0;
+        }
+        .sr-form-wrap {
+          margin-top: 24px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 12px;
+          align-items: start;
+        }
+        .sr-search-box {
+          position: relative;
+        }
+        .sr-search-shell {
+          position: relative;
+          padding: 6px;
+          border-radius: 22px;
+          background: linear-gradient(135deg, rgba(254,227,43,.24), rgba(255,255,255,.96));
+          box-shadow: 0 18px 36px rgba(23,21,16,0.08);
+        }
+        .sr-search-shell::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.55) 40%, transparent 60%);
+          transform: translateX(-120%);
+          animation: srSweep 4.8s linear infinite;
+          pointer-events: none;
+        }
+        .sr-search-inner {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: rgba(255,255,255,0.92);
+          border-radius: 18px;
+          padding: 0 16px;
+        }
+        .sr-search-icon {
+          flex: 0 0 auto;
+          color: ${COLORS.olive};
+          font-size: 18px;
+        }
+        .sr-search-input {
+          border: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+        .sr-suggestions {
+          position: absolute;
+          top: calc(100% + 10px);
+          left: 0;
+          right: 0;
+          border-radius: 18px;
+          border: 1px solid rgba(23,21,16,0.08);
+          background: rgba(255,255,255,.95);
+          backdrop-filter: blur(14px);
+          box-shadow: 0 20px 44px rgba(23,21,16,0.12);
+          overflow: hidden;
+          z-index: 40;
+          transform-origin: top center;
+          animation: srDropdown .2s ease;
+        }
+        .sr-suggestion-btn {
+          width: 100%;
+          text-align: left;
+          padding: 12px 14px;
+          border: 0;
+          background: transparent;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          font-size: 13px;
+          color: ${COLORS.ink};
+          transition: background .18s ease, transform .18s ease;
+        }
+        .sr-suggestion-btn:hover {
+          background: rgba(254,227,43,.14);
+        }
+        .sr-filter-bar {
+          display: grid;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 12px;
+          background: rgba(255,255,255,0.78);
+          border: 1px solid rgba(23,21,16,0.08);
+          backdrop-filter: blur(10px);
+          border-radius: 24px;
+          padding: 18px;
+          box-shadow: ${COLORS.shadowSoft};
+          margin-bottom: 22px;
+        }
+        .sr-filter-actions {
+          display: flex;
+          gap: 8px;
+          align-items: end;
+          flex-wrap: wrap;
+        }
+        .sr-results-top {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: center;
+          margin: 0 0 20px;
+          flex-wrap: wrap;
+        }
+        .sr-chip-row {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .sr-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,.84);
+          border: 1px solid rgba(23,21,16,.08);
+          color: ${COLORS.ink};
+          font-size: 12px;
+          font-weight: 800;
+          box-shadow: 0 8px 16px rgba(23,21,16,0.04);
+        }
+        .sr-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+          gap: 18px;
+          margin-bottom: 34px;
+        }
+        .sr-card {
+          background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.80));
+          border: 1px solid rgba(23,21,16,0.08);
+          border-radius: 24px;
+          box-shadow: ${COLORS.shadowSoft};
+          backdrop-filter: blur(10px);
+        }
+        .sr-product {
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s ease, border-color .35s ease;
+          position: relative;
+          isolation: isolate;
+        }
+        .sr-product::before {
+          content: "";
+          position: absolute;
+          inset: -1px;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(140deg, rgba(254,227,43,.42), rgba(255,255,255,0), rgba(139,126,53,.18));
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          opacity: 0;
+          transition: opacity .28s ease;
+          pointer-events: none;
+        }
+        .sr-product:hover {
+          transform: translateY(-8px);
+          box-shadow: 0 26px 50px rgba(23,21,16,0.12);
+          border-color: rgba(254,227,43,.30);
+        }
+        .sr-product:hover::before {
+          opacity: 1;
+        }
+        .sr-media-wrap {
+          position: relative;
+          height: 230px;
+          overflow: hidden;
+          margin: 12px 12px 0;
+          border-radius: 18px;
+          background: linear-gradient(180deg, #fff6bb, #f5f0d2);
+        }
+        .sr-media {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform .7s cubic-bezier(.2,.7,.2,1), filter .35s ease;
+        }
+        .sr-product:hover .sr-media {
+          transform: scale(1.06);
+          filter: saturate(1.03) contrast(1.02);
+        }
+        .sr-media-glow {
+          position: absolute;
+          inset: auto -14% -30% auto;
+          width: 160px;
+          height: 160px;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(254,227,43,.26), transparent 70%);
+          pointer-events: none;
+        }
+        .sr-badge {
+          position: absolute;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(10px);
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          padding: 7px 10px;
+          letter-spacing: .3px;
+        }
+        .sr-badge-sale {
+          top: 12px;
+          left: 12px;
+          background: ${COLORS.primary};
+          color: ${COLORS.ink};
+          box-shadow: 0 10px 18px rgba(254,227,43,.28);
+        }
+        .sr-badge-brand {
+          right: 12px;
+          bottom: 12px;
+          max-width: calc(100% - 24px);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          background: rgba(23,21,16,.78);
+          color: #fff;
+        }
+        .sr-stock-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(255,255,255,.72);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(4px);
+        }
+        .sr-stock-overlay span {
+          font-size: 12px;
+          font-weight: 900;
+          color: #b91c1c;
+          padding: 10px 14px;
+          border-radius: 999px;
+          background: rgba(255,255,255,.85);
+          border: 1px solid rgba(185,28,28,.10);
+        }
+        .sr-cart-btn {
+          width: 100%;
+          height: 48px;
+          border: 0;
+          border-radius: 14px;
+          background: linear-gradient(135deg, ${COLORS.ink} 0%, #2c271c 100%);
+          color: white;
+          font-weight: 900;
+          font-size: 13px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          cursor: pointer;
+          transition: transform .25s ease, box-shadow .25s ease, opacity .25s ease;
+          box-shadow: 0 14px 26px rgba(23,21,16,0.16);
+        }
+        .sr-cart-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 18px 32px rgba(23,21,16,0.20);
+        }
+        .sr-cart-btn.is-disabled {
+          cursor: not-allowed;
+          opacity: .58;
+          box-shadow: none;
+          background: rgba(23,21,16,.12);
+          color: ${COLORS.oliveDark};
+        }
+        .sr-cart-arrow {
+          display: inline-block;
+          transition: transform .22s ease;
+        }
+        .sr-cart-btn:hover .sr-cart-arrow {
+          transform: translateX(3px);
+        }
+        .sr-empty,
+        .sr-loading,
+        .sr-no-query {
+          padding: 52px 22px;
+          text-align: center;
+        }
+        .sr-empty-emoji {
+          font-size: 54px;
+          display: inline-block;
+          animation: srFloat 3.2s ease-in-out infinite;
+          margin-bottom: 12px;
+        }
+        .sr-pagination {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .sr-page-btn {
+          min-width: 42px;
+          height: 42px;
+          border-radius: 12px;
+          border: 1px solid rgba(23,21,16,.10);
+          background: rgba(255,255,255,.84);
+          color: ${COLORS.ink};
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: all .22s ease;
+        }
+        .sr-page-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 24px rgba(23,21,16,0.08);
+        }
+        .sr-page-btn.is-active {
+          background: linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDeep} 100%);
+          border-color: transparent;
+          box-shadow: 0 12px 22px rgba(254,227,43,.24);
+        }
+        .sr-page-btn:disabled {
+          opacity: .4;
+          cursor: not-allowed;
+        }
+        .sr-skeleton {
+          background: linear-gradient(90deg, rgba(23,21,16,.06) 20%, rgba(23,21,16,.09) 45%, rgba(23,21,16,.06) 70%);
+          background-size: 200% 100%;
+        }
+        .shimmer {
+          animation: shimmer 1.3s linear infinite;
+        }
+        @keyframes srReveal {
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes srDropdown {
+          from { opacity: 0; transform: translateY(8px) scale(.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes srSweep {
+          0% { transform: translateX(-130%); }
+          100% { transform: translateX(130%); }
+        }
+        @keyframes srFloat {
+          0%,100% { transform: translateY(0px); }
+          50% { transform: translateY(-14px); }
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        @media (max-width: 1100px) {
+          .sr-filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 768px) {
+          .sr-shell { padding: 24px 14px 48px; }
+          .sr-hero { padding: 20px; border-radius: 22px; }
+          .sr-form-wrap { grid-template-columns: 1fr; }
+          .sr-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 20px; }
+          .sr-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+          .sr-media-wrap { height: 180px; }
+          .sr-cart-btn { height: 44px; }
+        }
+        @media (max-width: 520px) {
+          .sr-filter-bar { grid-template-columns: 1fr; }
+          .sr-grid { grid-template-columns: 1fr 1fr; }
+          .sr-heading { font-size: 30px; }
+          .sr-chip-row { width: 100%; }
+        }
+      `}</style>
 
-        {/* Search bar */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: COLORS.ink, margin: "0 0 14px" }}>
-            {currentQ ? `Results for "${currentQ}"` : "Search products"}
-          </h1>
+      <div className="sr-page">
+        <div className="sr-blob one" />
+        <div className="sr-blob two" />
 
-          <form onSubmit={handleSearch} style={{ position: "relative", maxWidth: 540, display: "flex", gap: 8 }}>
-            <div style={{ flex: 1, position: "relative" }}>
+        <div className="sr-shell">
+          <section className="sr-hero sr-enter">
+            <div className="sr-eyebrow">✦ Premium product discovery</div>
+            <h1 className="sr-heading">
+              {currentQ ? `Results for “${currentQ}”` : "Search Products"}
+            </h1>
+            <p className="sr-subtitle">
+              Discover products with refined filters, smoother interactions, elegant spacing, and a more premium browsing flow.
+            </p>
+
+            <form onSubmit={handleSearch} className="sr-form-wrap">
+              <div className="sr-search-box">
+                <div className="sr-search-shell">
+                  <div className="sr-search-inner">
+                    <span className="sr-search-icon">⌕</span>
+                    <input
+                      value={inputValue}
+                      onChange={(e) => {
+                        setInputValue(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 180)}
+                      placeholder="Search products, brands..."
+                      style={{ ...s.input }}
+                      className="sr-search-input"
+                    />
+                  </div>
+                </div>
+
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="sr-suggestions">
+                    {!inputValue.trim() && (
+                      <p
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: COLORS.olive,
+                          letterSpacing: 1,
+                          textTransform: "uppercase",
+                          padding: "12px 14px 6px",
+                          margin: 0,
+                        }}
+                      >
+                        {user ? "Your recent searches" : "Popular searches"}
+                      </p>
+                    )}
+
+                    {suggestions.map((item, i) => (
+                      <button
+                        key={`${item.query}-${i}`}
+                        type="button"
+                        className="sr-suggestion-btn"
+                        onMouseDown={() => {
+                          setInputValue(item.query);
+                          setShowSuggestions(false);
+                          setSearchParams({ q: item.query });
+                        }}
+                      >
+                        <span style={{ fontSize: 14, opacity: 0.7 }}>{item.isHistory ? "🕐" : "🔍"}</span>
+                        <span style={{ flex: 1 }}>{item.query}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" style={s.btn({ primary: true })}>
+                Search now
+              </button>
+            </form>
+          </section>
+
+          <section className="sr-filter-bar sr-enter" style={{ animationDelay: "90ms" }}>
+            <div>
+              <p style={s.filterLabel}>MIN PRICE</p>
               <input
-                value={inputValue}
-                onChange={(e) => { setInputValue(e.target.value); setShowSuggestions(true); }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 180)}
-                placeholder="Search products, brands..."
-                style={s.input}
+                type="number"
+                placeholder="৳ 0"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                style={s.smallInput}
               />
-              {/* Autocomplete */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-                  background: COLORS.bg, border: `1px solid rgba(32,29,24,0.15)`,
-                  borderRadius: 12, zIndex: 30, overflow: "hidden",
-                  boxShadow: "0 8px 24px rgba(32,29,24,0.1)",
-                }}>
-                  {!inputValue.trim() && (
-                    <p style={{ fontSize: 10, fontWeight: 800, color: COLORS.olive, letterSpacing: 1, textTransform: "uppercase", padding: "8px 14px 4px", margin: 0 }}>
-                      {user ? "Your recent searches" : "Popular searches"}
-                    </p>
-                  )}
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={i} type="button"
-                      onMouseDown={() => {
-                        setInputValue(s.query);
-                        setShowSuggestions(false);
-                        setSearchParams({ q: s.query });
-                      }}
-                      style={{
-                        width: "100%", textAlign: "left", padding: "9px 14px",
-                        background: "none", border: "none", fontSize: 13,
-                        color: COLORS.ink, cursor: "pointer", display: "flex",
-                        alignItems: "center", gap: 8,
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = COLORS.soft}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "none"}
-                    >
-                      <span style={{ fontSize: 12, opacity: 0.6 }}>{s.isHistory ? "🕐" : "🔍"}</span>
-                      {s.query}
-                    </button>
-                  ))}
+            </div>
+
+            <div>
+              <p style={s.filterLabel}>MAX PRICE</p>
+              <input
+                type="number"
+                placeholder="৳ any"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                style={s.smallInput}
+              />
+            </div>
+
+            <div>
+              <p style={s.filterLabel}>AVAILABILITY</p>
+              <select value={inStock} onChange={(e) => setInStock(e.target.value)} style={s.smallInput}>
+                <option value="">Any</option>
+                <option value="true">In stock</option>
+                <option value="false">Out of stock</option>
+              </select>
+            </div>
+
+            <div>
+              <p style={s.filterLabel}>CATEGORY</p>
+              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={s.smallInput}>
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c.category_id} value={c.category_id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <p style={s.filterLabel}>SORT BY</p>
+              <select value={sort} onChange={(e) => setSort(e.target.value)} style={s.smallInput}>
+                <option value="">Newest first</option>
+                <option value="price_asc">Price: Low → High</option>
+                <option value="price_desc">Price: High → Low</option>
+                <option value="newest">Newest</option>
+                <option value="most_viewed">Most viewed</option>
+              </select>
+            </div>
+
+            <div className="sr-filter-actions">
+              <button type="button" onClick={handleApplyFilters} style={s.btn({ primary: true })}>
+                Apply filters
+              </button>
+              <button type="button" onClick={handleClearFilters} style={s.btn({ ghost: true })}>
+                Clear
+              </button>
+            </div>
+          </section>
+
+          <div className="sr-results-top sr-enter" style={{ animationDelay: "140ms" }}>
+            <div className="sr-chip-row">
+              <span className="sr-chip">{loading ? "Searching..." : `${total} result${total !== 1 ? "s" : ""}`}</span>
+              {activeFilterCount > 0 && <span className="sr-chip">{activeFilterCount} active filter{activeFilterCount > 1 ? "s" : ""}</span>}
+              {currentQ && <span className="sr-chip">Query: {currentQ}</span>}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="sr-grid">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SearchSkeletonCard key={i} index={i} />
+              ))}
+            </div>
+          ) : !searched ? (
+            <div className="sr-card sr-no-query sr-enter">
+              <div className="sr-empty-emoji">🛍️</div>
+              <p style={{ fontWeight: 900, color: COLORS.ink, fontSize: 18, margin: "0 0 8px" }}>Type something to search</p>
+              <p style={{ color: COLORS.subtext, fontSize: 14, margin: 0 }}>Start with a product name, brand, or category.</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="sr-card sr-empty sr-enter">
+              <div className="sr-empty-emoji">😔</div>
+              <p style={{ fontWeight: 900, fontSize: 18, color: COLORS.ink, margin: "0 0 8px" }}>
+                No results for “{currentQ}”
+              </p>
+              <p style={{ fontSize: 14, color: COLORS.subtext, margin: "0 0 18px" }}>
+                Try different keywords or remove some filters to widen the search.
+              </p>
+              <button type="button" onClick={handleClearFilters} style={s.btn({ primary: true })}>
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="sr-grid">
+                {products.map((p, i) => (
+                  <ProductCard key={p.product_id || p.id} p={p} onAddToCart={handleAddToCart} index={i} />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="sr-pagination sr-enter" style={{ animationDelay: "120ms" }}>
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 1}
+                    className="sr-page-btn"
+                  >
+                    ← Prev
+                  </button>
+
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    const pg = page <= 3 ? i + 1 : page - 2 + i;
+                    if (pg < 1 || pg > totalPages) return null;
+                    return (
+                      <button
+                        key={pg}
+                        type="button"
+                        onClick={() => handlePageChange(pg)}
+                        className={`sr-page-btn ${pg === page ? "is-active" : ""}`}
+                      >
+                        {pg}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page === totalPages}
+                    className="sr-page-btn"
+                  >
+                    Next →
+                  </button>
                 </div>
               )}
-            </div>
-            <button type="submit" style={{ ...s.btn(true), marginLeft: 4 }}>Search</button>
-          </form>
-        </div>
-
-        {/* Filters */}
-        <div style={{
-          background: COLORS.bg, border: `1px solid rgba(32,29,24,0.1)`,
-          borderRadius: 14, padding: "14px 16px", marginBottom: 24,
-          display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end",
-        }}>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>MIN PRICE</p>
-            <input
-              type="number" placeholder="₹ 0" value={minPrice}
-              onChange={(e) => setMinPrice(e.target.value)}
-              style={{ ...s.input, width: 90 }}
-            />
-          </div>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>MAX PRICE</p>
-            <input
-              type="number" placeholder="₹ any" value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-              style={{ ...s.input, width: 90 }}
-            />
-          </div>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>AVAILABILITY</p>
-            <select
-              value={inStock}
-              onChange={(e) => setInStock(e.target.value)}
-              style={{ ...s.input, width: 130 }}
-            >
-              <option value="">Any</option>
-              <option value="true">In stock</option>
-              <option value="false">Out of stock</option>
-            </select>
-          </div>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>CATEGORY</p>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              style={{ ...s.input, width: 160 }}
-            >
-              <option value="">All categories</option>
-              {categories.map((c) => (
-                <option key={c.category_id} value={c.category_id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: COLORS.olive, margin: "0 0 4px" }}>SORT BY</p>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              style={{ ...s.input, width: 160 }}
-            >
-              <option value="">Newest first</option>
-              <option value="price_asc">Price: Low → High</option>
-              <option value="price_desc">Price: High → Low</option>
-              <option value="newest">Newest</option>
-              <option value="most_viewed">Most viewed</option>
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={handleApplyFilters} style={s.btn(true)}>Apply</button>
-            <button onClick={handleClearFilters} style={s.btn(false)}>Clear</button>
-          </div>
-          {searched && (
-            <span style={{ fontSize: 13, color: COLORS.olive, marginLeft: 4, alignSelf: "center" }}>
-              {loading ? "Searching..." : `${total} result${total !== 1 ? "s" : ""}`}
-            </span>
+            </>
           )}
         </div>
-
-        {/* Results */}
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 60 }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
-            <p style={{ fontWeight: 700, color: COLORS.olive }}>Searching...</p>
-          </div>
-        ) : !searched ? (
-          <div style={{ textAlign: "center", padding: 60, color: COLORS.olive }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🛍️</div>
-            <p style={{ fontWeight: 700 }}>Type something to search</p>
-          </div>
-        ) : products.length === 0 ? (
-          <div style={{ ...s.card, padding: 48, textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>😔</div>
-            <p style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 8 }}>
-              No results for "{currentQ}"
-            </p>
-            <p style={{ fontSize: 13, color: COLORS.olive, marginBottom: 20 }}>
-              Try different keywords or remove some filters.
-            </p>
-            <button onClick={handleClearFilters} style={{ ...s.btn(true), padding: "10px 24px" }}>
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: 16, marginBottom: 32,
-            }}>
-              {products.map((p) => (
-                <ProductCard key={p.product_id || p.id} p={p} onAddToCart={handleAddToCart} />
-              ))}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}>
-                <button
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 1}
-                  style={{ ...s.btn(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? "not-allowed" : "pointer" }}
-                >← Prev</button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const pg = page <= 3 ? i + 1 : page - 2 + i;
-                  if (pg < 1 || pg > totalPages) return null;
-                  return (
-                    <button
-                      key={pg}
-                      onClick={() => handlePageChange(pg)}
-                      style={{
-                        width: 36, height: 36, borderRadius: 8, border: "none",
-                        background: pg === page ? COLORS.primary : "transparent",
-                        color: COLORS.ink, fontWeight: pg === page ? 900 : 400,
-                        cursor: "pointer", fontSize: 13,
-                      }}
-                    >{pg}</button>
-                  );
-                })}
-                <button
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page === totalPages}
-                  style={{ ...s.btn(false), opacity: page === totalPages ? 0.4 : 1, cursor: page === totalPages ? "not-allowed" : "pointer" }}
-                >Next →</button>
-              </div>
-            )}
-          </>
-        )}
       </div>
-    </div>
+    </>
   );
 }

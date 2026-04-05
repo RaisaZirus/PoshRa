@@ -155,7 +155,7 @@ router.post("/confirm", authMiddleware, async (req, res) => {
        JOIN customers c ON c.customer_id = o.customer_id
        JOIN users u ON u.user_id = c.user_id
        WHERE o.order_id = $1`,
-      [payment.order_id, `Payment of ₹${Number(payment.amount).toFixed(2)} confirmed for order #${payment.order_id}.`]
+      [payment.order_id, `Payment of ৳${Number(payment.amount).toFixed(2)} confirmed for order #${payment.order_id}.`]
     );
 
     await client.query("COMMIT");

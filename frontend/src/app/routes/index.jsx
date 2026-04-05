@@ -56,7 +56,6 @@ import SellerReturnsPage from "../../features/seller/pages/SellerReturnsPage.jsx
 // Admin
 import AdminDashboardPage from "../../features/admin/pages/AdminDashboardPage.jsx";
 import AdminUsersPage from "../../features/admin/pages/AdminUsersPage.jsx";
-import AdminReportsPage from "../../features/admin/pages/AdminReportsPage.jsx";
 import AdminCampaignsPage from "../../features/admin/pages/AdminCampaignsPage.jsx";
 import AdminCommissionsPage from "../../features/admin/pages/AdminCommissionsPage.jsx";
 import AdminPayoutsPage from "../../features/admin/pages/AdminPayoutsPage.jsx";
@@ -165,7 +164,6 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="dashboard" replace /> },
       { path: "dashboard", element: <AdminDashboardPage /> },
       { path: "users", element: <AdminUsersPage /> },
-      { path: "reports", element: <AdminReportsPage /> },
       { path: "campaigns", element: <AdminCampaignsPage /> },
       { path: "commissions", element: <AdminCommissionsPage /> },
       { path: "payouts", element: <AdminPayoutsPage /> },

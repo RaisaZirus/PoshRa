@@ -92,7 +92,6 @@ export default function AdminDashboardPage() {
     { label: "Shipping Revenue", value: fmtMoney(stats.total_shipping), accent: "#8b5cf6", sub: "delivery charges" },
     { label: "Net Revenue",      value: fmtMoney(stats.net_revenue), accent: "#10b981" },
     { label: "Pending KYC",      value: fmt(stats.pending_kyc),    link: "/admin/users?kyc=pending", accent: "#f59e0b", sub: "sellers awaiting review" },
-    { label: "Open Reports",     value: fmt(stats.pending_reports), link: "/admin/reports",    accent: "#f87171", sub: "need resolution" },
   ];
 
   return (
@@ -115,7 +114,6 @@ export default function AdminDashboardPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
           {[
             { to: "/admin/users?kyc=pending", label: "Review KYC", color: "#f59e0b" },
-            { to: "/admin/reports",           label: "Resolve Reports", color: "#f87171" },
             { to: "/admin/campaigns",         label: "Manage Campaigns", color: C.primary },
             { to: "/admin/commissions",       label: "Set Commissions", color: "#4ade80" },
             { to: "/admin/payouts",           label: "Process Payouts", color: "#38bdf8" },

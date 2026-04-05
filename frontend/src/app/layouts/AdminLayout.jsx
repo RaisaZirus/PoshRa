@@ -14,7 +14,6 @@ const C = {
 const NAV = [
   { to: "/admin/dashboard",         label: "Dashboard",         icon: "◈" },
   { to: "/admin/users",             label: "Users & Sellers",   icon: "◉" },
-  { to: "/admin/reports",           label: "Reports",           icon: "⚑" },
   { to: "/admin/campaigns",         label: "Campaigns",         icon: "◆" },
   { to: "/admin/commissions",       label: "Commissions",       icon: "◐" },
   { to: "/admin/payouts",           label: "Payouts",           icon: "◑" },
